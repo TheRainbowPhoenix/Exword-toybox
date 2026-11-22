@@ -7,9 +7,9 @@ A native **EXWord terminal shell** based on [Edelweiss](https://github.com/TheRa
 ```text
 TOYBX/_CONTENT/
     toybox.d01      native resident kernel + text terminal + command lookup
-    base.edl        ls cat echo cp mv rm touch mkdir date true
+    base.edl        ls cat echo cp mv rm touch mkdir rmdir date true
     editors.edl     editable vi-lite and nano-lite modes (32 KiB max file)
-    text.edl        wc head grep
+    text.edl        wc head grep basename dirname uniq sort tail
 ```
 
 A module declares an applet manifest as a **non-loaded** `.edl.cmd` ELF section,
@@ -76,4 +76,46 @@ are not yet validated on physical hardware.
 The bounded resident command registry supports **four EDL bundles and 48 total
 applet names**. The next milestone is read-only device verification (boot,
 keyboard, `help`, `pwd`, `modules`, `ls`, `cat`, module return), followed
-by controlled tests of disposable files and then the source-level BusyBox port.
+by controlled tests of disposable files and further BusyBox applet ports.
+
+## Native filesystem operations and name limits
+
+Toybox uses the same native EX-word filesystem syscall pattern as
+[EXWord-Explorer](https://github.com/TheRainbowPhoenix/EXWord-Explorer):
+`exword_sys_create(path,1)` for files, `exword_sys_create(path,5)` for folders,
+`exword_sys_open(path,3)` for read/write, and OS-world switching for native
+calls. All modifying operations are checked at the resident service boundary
+**and** in the low-level native filesystem adapter.
+
+New/modified **file** names must use ASCII **8.3** (`NAME1234.TXT`, maximum
+8-byte stem and 3-byte extension). Folder names must be at most **12 ASCII
+characters** without a dot. Supported name characters are letters, digits,
+underscore, hyphen, dollar sign, and tilde. Invalid names are **rejected**, not
+silently truncated to a possibly colliding destination.
+
+`mkdir -p` creates missing parent directories; `rmdir` only removes an empty
+directory; `rm` refuses to delete a directory. File writes and editor saves
+are backed by the native API, but overwrite/truncate still deletes and
+recreates the file and is **not atomic**. Never edit important or sole-copy data
+before validating on your exact EX-word firmware. Executable `.edl`/`.d01`
+files in Toybox's installed directory remain write-protected.
+
+## BusyBox source-level ports
+
+`src/busybox_text.c` adapts algorithms from **BusyBox 0.60.5** for `basename`,
+`dirname`, `uniq`, `sort`, and `tail` to the EDL API; copyright notices are
+retained there, and `COPYING.BUSYBOX` supplies the GNU GPL version 2 terms.
+These are adaptations, not drop-in unmodified binaries. The source code and
+building scripts are included in this repository.
+
+The first port deliberately uses bounded memory and explicit input filenames:
+`sort` supports `-nru` and `-o OUTPUT` but is limited to **128 lines of at
+most 255 bytes**; `uniq` supports `-cdu` and `[INPUT [OUTPUT]]`; `tail`
+supports `-n N` and `-c N`. There is no stdin or pipe support, so commands
+like `sort` without a filename are not yet available. `vi` and `nano` remain
+the separate lightweight editors, not upstream BusyBox vi or GNU nano.
+
+**This is a partial BusyBox port.** A complete BusyBox userspace would require
+more POSIX compatibility, terminal handling and substantial additional applet
+porting; commands involving processes, fork/exec, network facilities,
+permissions, pipes, or signals are not currently supported.

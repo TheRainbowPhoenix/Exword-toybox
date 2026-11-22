@@ -7,9 +7,9 @@ build = Path(sys.argv[1])
 app_id = sys.argv[2] if len(sys.argv) > 2 else "TOYBX"
 module = sys.argv[3] if len(sys.argv) > 3 else "toybox"
 expected = {
-    'base': {'ls','cat','echo','cp','mv','rm','touch','mkdir','date','true'},
+    'base': {'ls','cat','echo','cp','mv','rm','touch','mkdir','rmdir','date','true'},
     'editors': {'vi','nano'},
-    'text': {'wc','head','grep'}
+    'text': {'wc','head','grep','basename','dirname','uniq','sort','tail'}
 }
 boot = build / f'{module}.d01'
 data = boot.read_bytes()
@@ -67,5 +67,6 @@ for locale in ('ja','cn'):
             assert (folder/basename).read_bytes() == (build/basename).read_bytes()
         assert (folder/'fileinfo.cji').is_file()
         assert list(folder.glob('*.htm'))
+        assert (folder/'COPYING.TXT').read_bytes() == (Path(__file__).resolve().parents[1]/'COPYING.BUSYBOX').read_bytes()
         print(f'PASS: {locale} installation package')
 print('PASS: D01 size, ELF manifests, and 8.3 layout')

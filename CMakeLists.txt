@@ -87,6 +87,9 @@ if(SHELL_BUILD_PACKAGES)
         "$<TARGET_FILE:editors>" "${CMAKE_BINARY_DIR}/packages/${locale}/${EXWORD_APP_ID}/editors.edl"
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:text>" "${CMAKE_BINARY_DIR}/packages/${locale}/${EXWORD_APP_ID}/text.edl"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.BUSYBOX"
+        "${CMAKE_BINARY_DIR}/packages/${locale}/${EXWORD_APP_ID}/COPYING.TXT"
       DEPENDS toybox_package_${locale} base editors text VERBATIM)
   endforeach()
 endif()
