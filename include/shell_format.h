@@ -6,7 +6,7 @@
 #define SHELL_MANIFEST_VERSION 1u
 #define SHELL_MAX_COMMANDS 24u
 #define SHELL_NAME_SIZE 16u
-#define SHELL_MAX_MODULES 4u
+#define SHELL_MAX_MODULES 5u
 #define SHELL_MAX_ARGS 16u
 #define SHELL_LINE_SIZE 192u
 struct shell_manifest {
