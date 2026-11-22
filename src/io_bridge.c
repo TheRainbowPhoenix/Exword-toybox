@@ -2,7 +2,7 @@
 #include <edl.h>
 #include <string.h>
 /* D01-owned resident memory, never EDL stack or arena storage. */
-static unsigned char stage[256];
+static unsigned char stage[128];
 static char safe_path[EDL_PATH_MAX];
 static int copy_path(const char *path)
 {

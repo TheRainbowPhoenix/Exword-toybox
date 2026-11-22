@@ -18,7 +18,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define MAX_ROUTES 48u /* shared command pool, not 24 names per module */
+#define MAX_ROUTES 48u
+#define ROUTE_NAME_BYTES 256u /* Packed names instead of 48 x 16-byte slots */
 #define WHITE 0xffff
 #define DARK  0x0841
 #define BLUE  0x2273
@@ -31,12 +32,13 @@ static int keyboard_visible, in_applet; /* default: physical keyboard */
 
 /* Every EDL is adjacent to content: keep only the 8.3 basename. */
 struct module { char name[13]; };
-/* Allocate names once in a shared registry, not in per-module fixed arrays. */
-struct route { char name[SHELL_NAME_SIZE]; uint8_t mod; };
+/* Store offsets into a compact byte pool; command names are NUL-terminated. */
+struct route { uint8_t name_at, mod; };
 _Static_assert(SHELL_MAX_MODULES <= UINT8_MAX, "module indices must fit in a byte");
 static struct module modules[SHELL_MAX_MODULES];
 static struct route routes[MAX_ROUTES];
-static unsigned module_count, route_count;
+static char route_names[ROUTE_NAME_BYTES];
+static unsigned module_count, route_count, route_used;
 static struct shell_api api;
 
 static int ci_equal(const char *a, const char *b)
@@ -399,22 +401,30 @@ static int add_module(const char *filename)
     if (size<0) return -1;
     struct shell_manifest manifest;
     if (shell_manifest_read(read_manifest_bytes,path,(uint32_t)size,&manifest)) return -1;
-    for (unsigned i=0;i<manifest.count;i++)
+    unsigned needed=0;
+    for (unsigned i=0;i<manifest.count;i++) {
         for (unsigned j=0;j<route_count;j++)
-            if (ci_equal(manifest.names[i],routes[j].name)) return -1;
-    if (route_count+manifest.count>MAX_ROUTES) return -1;
+            if (ci_equal(manifest.names[i],
+                         route_names+routes[j].name_at)) return -1;
+        needed+=(unsigned)strlen(manifest.names[i])+1u;
+    }
+    if (route_count+manifest.count>MAX_ROUTES ||
+        needed>ROUTE_NAME_BYTES-route_used) return -1;
     unsigned m=module_count++;
     memcpy(modules[m].name,filename,strlen(filename)+1);
     for (unsigned i=0;i<manifest.count;i++) {
         struct route *r=&routes[route_count++];
-        memcpy(r->name,manifest.names[i],SHELL_NAME_SIZE);
+        unsigned n=(unsigned)strlen(manifest.names[i])+1u;
+        r->name_at=(uint8_t)route_used;
         r->mod=(uint8_t)m;
+        memcpy(route_names+route_used,manifest.names[i],n);
+        route_used+=n;
     }
     return 0;
 }
 static void discover(void)
 {
-    module_count=route_count=0;
+    module_count=route_count=route_used=0;
     struct shell_dirent entries[8];
     int total=host_fs_list(content,0,entries,8);
     if (total<0) return;
@@ -453,7 +463,7 @@ static void show_help(void)
     println("builtins: cd pwd help clear history modules keyscan exit");
     print("applets: ");
     for (unsigned i=0;i<route_count;i++) {
-        print(routes[i].name);
+        print(route_names+routes[i].name_at);
         print((i+1)%6==0?"\n":" ");
     }
     new_line();
@@ -489,7 +499,7 @@ static int run_command(char *line)
         return 0;
     }
     for (unsigned i=0;i<route_count;i++) {
-        if (!ci_equal(argv[0],routes[i].name)) continue;
+        if (!ci_equal(argv[0],route_names+routes[i].name_at)) continue;
         if (combine(image_path,content,modules[routes[i].mod].name)) return -1;
         api.command=argv[0]; api.argc=argc; api.argv=argv;
         api.edl.arena_start=edl_active_arena.arena_start;

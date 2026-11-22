@@ -28,10 +28,10 @@ int main(void)
     for(unsigned i=0;i<sizeof source;i++) source[i]=(char)('A'+i%26);
     unsafe_path=path;unsafe_bytes=source;
     assert(shell_io_write(native_write,path,0,source,sizeof source,3u)==700);
-    assert(writes==3&&created==1);
+    assert(writes==6&&created==1);
     unsafe_bytes=dest;
     assert(shell_io_read(native_read,path,0,dest,sizeof dest)==700);
-    assert(reads==3&&!memcmp(dest,source,sizeof source));
+    assert(reads==6&&!memcmp(dest,source,sizeof source));
     assert(shell_io_write(native_write,path,0,source,0,2u)==0);
     assert(shell_io_read(native_read,path,0,NULL,3)==-1);
     assert(shell_io_read(native_read,path,UINT32_MAX,NULL,2)==-1);

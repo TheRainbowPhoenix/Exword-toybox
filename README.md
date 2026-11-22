@@ -214,3 +214,11 @@ first compare the same file's raw bytes with EXWord-Explorer's hex viewer.
 The shell intentionally treats \`cat\` / \`hexdump\` as byte-oriented and does
 not decode encrypted or compressed dictionary content. ASCII text outside the
 add-in is the appropriate regression test for the native I/O implementation.
+
+### Resident RAM budget
+
+To preserve the EX-word linker's 4 KiB minimum heap, the applet dispatcher
+packs NUL-terminated command names into a shared 256-byte pool (up to
+48 routes), and the native-world I/O bridge copies data through a 128-byte
+resident staging buffer. The command-history pool is 512 bytes. These limits
+are independent of the maximum 128 KiB \`.d01\` file size.
