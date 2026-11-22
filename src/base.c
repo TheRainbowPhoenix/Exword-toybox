@@ -6,8 +6,8 @@
 
 __attribute__((used,section(".edl.cmd"),aligned(4)))
 const struct shell_manifest shell_commands = {
-    .magic=SHELL_MANIFEST_MAGIC,.version=SHELL_MANIFEST_VERSION,.count=10,
-    .names={"ls","cat","echo","cp","mv","rm","touch","mkdir","date","true"}
+    .magic=SHELL_MANIFEST_MAGIC,.version=SHELL_MANIFEST_VERSION,.count=11,
+    .names={"ls","cat","echo","cp","mv","rm","touch","mkdir","rmdir","date","true"}
 };
 
 static int app_ls(const struct shell_api *sh)
@@ -93,7 +93,8 @@ static int app_rm(const struct shell_api *sh)
     int error=0;
     for (int i=1;i<sh->argc;i++) {
         char path[EDL_PATH_MAX];
-        if (m_path(sh,sh->argv[i],path) || sh->file_delete(path)<0) {
+        if (m_path(sh,sh->argv[i],path) ||
+            sh->list_dir(path,0,NULL,0)>=0 || sh->file_delete(path)<0) {
             m_line(sh,"rm: delete failed");error=1;
         }
     }
@@ -114,10 +115,39 @@ static int app_touch(const struct shell_api *sh)
 }
 static int app_mkdir(const struct shell_api *sh)
 {
-    if (sh->argc!=2) return m_usage(sh,"usage: mkdir DIRECTORY");
+    int i=1, parents=0;
+    if (i<sh->argc && m_equal(sh->argv[i],"-p")) { parents=1; i++; }
+    if (sh->argc-i!=1) return m_usage(sh,"usage: mkdir [-p] DIRECTORY");
     char path[EDL_PATH_MAX];
-    if (m_path(sh,sh->argv[1],path)) return 2;
-    return sh->file_create(path,1)<0?m_usage(sh,"mkdir: creation failed"):0;
+    if (m_path(sh,sh->argv[i],path)) return 2;
+    if (!parents)
+        return sh->file_create(path,1)<0?m_usage(sh,"mkdir: creation failed"):0;
+    char *p=path+2;
+    while (*p && *p!='\\') p++;
+    if (!*p || !p[1]) return m_usage(sh,"mkdir: invalid path");
+    for (p++; ;p++) {
+        if (*p && *p!='\\') continue;
+        char saved=*p;*p=0;
+        int ok=sh->file_create(path,1)>=0 || sh->list_dir(path,0,NULL,0)>=0;
+        *p=saved;
+        if (!ok) return m_usage(sh,"mkdir: cannot create directory");
+        if (!saved) break;
+    }
+    return 0;
+}
+static int app_rmdir(const struct shell_api *sh)
+{
+    if (sh->argc<2) return m_usage(sh,"usage: rmdir DIRECTORY...");
+    int errors=0;
+    for (int i=1;i<sh->argc;i++) {
+        char path[EDL_PATH_MAX];
+        if (m_path(sh,sh->argv[i],path)) {errors=1;continue;}
+        /* Never invoke native delete on files or nonempty directories. */
+        if (sh->list_dir(path,0,NULL,0)!=0 || sh->file_delete(path)<0) {
+            m_line(sh,"rmdir: directory not empty or delete failed");errors=1;
+        }
+    }
+    return errors;
 }
 static int app_date(const struct shell_api *sh)
 {
@@ -148,6 +178,7 @@ int edl_main(const struct edl_api *edl)
     if (m_equal(sh->command,"rm")) return app_rm(sh);
     if (m_equal(sh->command,"touch")) return app_touch(sh);
     if (m_equal(sh->command,"mkdir")) return app_mkdir(sh);
+    if (m_equal(sh->command,"rmdir")) return app_rmdir(sh);
     if (m_equal(sh->command,"date")) return app_date(sh);
     if (m_equal(sh->command,"true")) return 0;
     return 127;

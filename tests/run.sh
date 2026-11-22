@@ -4,12 +4,15 @@ cd "$(dirname "$0")/.."
 cc -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude \
   src/parser.c src/manifest.c tests/check_host.c -o /tmp/toybox-host-tests
 /tmp/toybox-host-tests
+cc -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude \
+  src/names.c tests/check_names.c -o /tmp/toybox-name-tests
+/tmp/toybox-name-tests
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   -Itests/stubs -Iinclude -Isrc \
   src/base.c src/text.c src/editors.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   '-DEDL_APPID="TOYBX"' -Itests/stubs -Iinclude -Isrc \
-  src/host.c src/host_fs.c
+  src/host.c src/host_fs.c src/names.c
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
   -Dedl_main=base_edl_main -Dshell_commands=base_commands -c src/base.c -o /tmp/toybox-base.o
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \

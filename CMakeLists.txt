@@ -46,7 +46,7 @@ file(WRITE "${EDL_LINKER}" "${edl_script}")
 # firmware gating, cache coordination and native service sources are reused.
 set(EDL_HOST_DIR "${edelweiss_SOURCE_DIR}/exword")
 add_executable(toybox
-  src/host.c src/host_fs.c src/manifest.c src/parser.c
+  src/host.c src/host_fs.c src/names.c src/manifest.c src/parser.c
   "${EDL_HOST_DIR}/fs.c" "${EDL_HOST_DIR}/paths.c"
   "${EDL_HOST_DIR}/profile.c" "${EDL_HOST_DIR}/firmware.c"
   "${EDL_HOST_DIR}/scratch.c" "${EDL_HOST_DIR}/read_cache.c"

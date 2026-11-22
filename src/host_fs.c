@@ -1,4 +1,5 @@
 #include "host_fs.h"
+#include "shell_names.h"
 #include <gint/exword.h>
 #include <gint/gint.h>
 #include <string.h>
@@ -150,6 +151,8 @@ static int write_native(struct write_query *q)
 int host_fs_write(const char *path, unsigned offset, const void *data,
                   unsigned length, unsigned flags)
 {
+    if (!shell_path_valid(path,0) || (flags & ~(SHELL_WRITE_CREATE|SHELL_WRITE_TRUNC)))
+        return -1;
     struct write_query q = {path, offset, length, flags, data};
     return gint_world_switch(GINT_CALL(write_native, (void *)&q));
 }
@@ -158,25 +161,28 @@ static int delete_native(struct size_query *q) { return exword_sys_delete(q->pat
 int host_fs_delete(const char *path)
 {
     struct size_query q = {.path = path};
-    return path ? gint_world_switch(GINT_CALL(delete_native, (void *)&q)) : -1;
+    return shell_path_valid(path,host_fs_dir_exists(path)) ?
+           gint_world_switch(GINT_CALL(delete_native, (void *)&q)) : -1;
 }
 static int rename_native(struct rename_query *q)
 { return exword_sys_rename(q->old_path, q->new_path); }
 int host_fs_rename(const char *old_path, const char *new_path)
 {
-    if (!old_path || !new_path) return -1;
+    int directory=host_fs_dir_exists(old_path);
+    if (!shell_path_valid(old_path,directory) ||
+        !shell_path_valid(new_path,directory)) return -1;
     struct rename_query q = {.old_path = old_path, .new_path = new_path};
     return gint_world_switch(GINT_CALL(rename_native, (void *)&q));
 }
 static int create_native(struct rename_query *q)
 {
     /* SDK's type=1 is a file; directory type=5 matches EX-word directory entries.
-       Directory creation needs device validation before enabling by default. */
+       Creation/type semantics match EXWord-Explorer. Validate names before I/O. */
     return exword_sys_create(q->old_path, q->directory ? 5 : 1);
 }
 int host_fs_create(const char *path, int directory)
 {
-    if (!path) return -1;
+    if (!shell_path_valid(path,directory)) return -1;
     struct rename_query q = {.old_path = path, .directory = directory};
     return gint_world_switch(GINT_CALL(create_native, (void *)&q));
 }

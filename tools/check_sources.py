@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 root = Path(__file__).resolve().parents[1]
 modules = {
-    'base': {'ls', 'cat', 'echo', 'cp', 'mv', 'rm', 'touch', 'mkdir', 'date', 'true'},
+    'base': {'ls', 'cat', 'echo', 'cp', 'mv', 'rm', 'touch', 'mkdir', 'rmdir', 'date', 'true'},
     'editors': {'vi', 'nano'},
     'text': {'wc', 'head', 'grep'},
 }

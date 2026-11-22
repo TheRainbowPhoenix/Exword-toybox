@@ -1,6 +1,7 @@
 /* Resident EX-word shell: standard gint D01, Edelweiss ELF loader and services. */
 #include "host.h"
 #include "host_fs.h"
+#include "shell_names.h"
 #include "shell_parse.h"
 #include <gint/display.h>
 #include <gint/keyboard.h>
@@ -301,19 +302,25 @@ static int protected_module_path(const char *path)
 }
 static int safe_write(const char *path,unsigned offset,const void *bytes,unsigned size,unsigned flags)
 {
-    return protected_module_path(path)?-1:host_fs_write(path,offset,bytes,size,flags);
+    return !shell_path_valid(path,0) || protected_module_path(path) ?
+           -1 : host_fs_write(path,offset,bytes,size,flags);
 }
 static int safe_delete(const char *path)
 {
-    return protected_module_path(path)?-1:host_fs_delete(path);
+    return !shell_path_valid(path,host_fs_dir_exists(path)) ||
+           protected_module_path(path) ? -1 : host_fs_delete(path);
 }
 static int safe_rename(const char *from,const char *to)
 {
-    return (protected_module_path(from)||protected_module_path(to))?-1:host_fs_rename(from,to);
+    int directory=host_fs_dir_exists(from);
+    return !shell_path_valid(from,directory) || !shell_path_valid(to,directory) ||
+           protected_module_path(from) || protected_module_path(to) ?
+           -1 : host_fs_rename(from,to);
 }
 static int safe_create(const char *path,int directory)
 {
-    return protected_module_path(path)?-1:host_fs_create(path,directory);
+    return !shell_path_valid(path,directory) || protected_module_path(path) ?
+           -1 : host_fs_create(path,directory);
 }
 static void init_api(void)
 {
