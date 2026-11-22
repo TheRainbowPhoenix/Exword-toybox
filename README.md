@@ -58,3 +58,22 @@ payload in the shared memory arena, no module pointers survive a return.
 The default startup directory is the active add-in's `_CONTENT` folder.
 Absolute paths can use `/drv0/...`, `/crd0/...` or `/crd1/...` (the host also
 accepts native backslashes), while relative paths use the persistent `cwd`.
+
+## CI build and hardware safety
+
+GitHub Actions has **successfully cross-compiled** the native D01 and all three
+EDL modules, verified the D01 is at most 128 KiB, and validated the Japanese
+and Chinese installation packages. Download the appropriate `Toybox-ja` or
+`Toybox-cn` package from [GitHub Actions](https://github.com/TheRainbowPhoenix/Exword-toybox/actions).
+
+**No hardware execution has been performed.** Edelweiss's firmware
+fingerprints and executable RAM assumptions remain experimental. Do not use
+an unknown firmware or a device you cannot recover, and back up device data.
+See the [read-only device smoke-test checklist](docs/SMOKE_TEST.md) before
+trying filesystem modifications. Destructive writes, including editor saves,
+are not yet validated on physical hardware.
+
+The bounded resident command registry supports **four EDL bundles and 48 total
+applet names**. The next milestone is read-only device verification (boot,
+keyboard, `help`, `pwd`, `modules`, `ls`, `cat`, module return), followed
+by controlled tests of disposable files and then the source-level BusyBox port.

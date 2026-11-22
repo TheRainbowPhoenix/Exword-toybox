@@ -16,6 +16,7 @@ data = boot.read_bytes()
 assert data[:16] == b'CASIODICPLUGIN10', 'invalid D01 header'
 assert 128 < len(data) <= 131072, f'D01 exceeds 128 KiB ({len(data)} bytes)'
 assert len(boot.name) <= 12
+print(f'PASS: {boot.name}: {len(data)} / 131072 bytes ({131072-len(data)} free)')
 
 def read_manifest(filename):
     b = filename.read_bytes()
