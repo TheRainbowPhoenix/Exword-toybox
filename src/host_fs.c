@@ -19,7 +19,7 @@ int host_fs_size(const char *path)
 {
     if (!path) return -1;
     struct size_query q = {.path = path};
-    return gint_world_switch(GINT_CALL(size_native, &q));
+    return gint_world_switch(GINT_CALL(size_native, (void *)&q));
 }
 static int same_name(const char *a, const char *b)
 {
@@ -102,14 +102,14 @@ int host_fs_list(const char *path, unsigned first, struct shell_dirent *items, u
 {
     if (!path || (capacity && !items) || capacity > 64 || first > 65535) return -1;
     struct dir_query q = {path, first, capacity, items};
-    return gint_world_switch(GINT_CALL(list_native, &q));
+    return gint_world_switch(GINT_CALL(list_native, (void *)&q));
 }
 static int exists_native(struct size_query *q) { return exists_dir_native(q->path); }
 int host_fs_dir_exists(const char *path)
 {
     if (!path) return 0;
     struct size_query q = {.path = path};
-    return gint_world_switch(GINT_CALL(exists_native, &q));
+    return gint_world_switch(GINT_CALL(exists_native, (void *)&q));
 }
 struct write_query {
     const char *path;
@@ -151,14 +151,14 @@ int host_fs_write(const char *path, unsigned offset, const void *data,
                   unsigned length, unsigned flags)
 {
     struct write_query q = {path, offset, length, flags, data};
-    return gint_world_switch(GINT_CALL(write_native, &q));
+    return gint_world_switch(GINT_CALL(write_native, (void *)&q));
 }
 struct rename_query { const char *old_path, *new_path; int directory; };
 static int delete_native(struct size_query *q) { return exword_sys_delete(q->path); }
 int host_fs_delete(const char *path)
 {
     struct size_query q = {.path = path};
-    return path ? gint_world_switch(GINT_CALL(delete_native, &q)) : -1;
+    return path ? gint_world_switch(GINT_CALL(delete_native, (void *)&q)) : -1;
 }
 static int rename_native(struct rename_query *q)
 { return exword_sys_rename(q->old_path, q->new_path); }
@@ -166,7 +166,7 @@ int host_fs_rename(const char *old_path, const char *new_path)
 {
     if (!old_path || !new_path) return -1;
     struct rename_query q = {.old_path = old_path, .new_path = new_path};
-    return gint_world_switch(GINT_CALL(rename_native, &q));
+    return gint_world_switch(GINT_CALL(rename_native, (void *)&q));
 }
 static int create_native(struct rename_query *q)
 {
@@ -178,5 +178,5 @@ int host_fs_create(const char *path, int directory)
 {
     if (!path) return -1;
     struct rename_query q = {.old_path = path, .directory = directory};
-    return gint_world_switch(GINT_CALL(create_native, &q));
+    return gint_world_switch(GINT_CALL(create_native, (void *)&q));
 }
