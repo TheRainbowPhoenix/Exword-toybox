@@ -48,6 +48,11 @@ int main(void)
     test_parse("ls",1,"ls",NULL,NULL);
     test_parse("  cp 'a file' \"b file\"  ",3,"cp","a file","b file");
     test_parse("echo hello\\ world",2,"echo","hello world",NULL);
+    test_parse("printf '%s\\n' hello",3,"printf","%s\\n","hello");
+    test_parse("printf \"%s\\n\" hello",3,"printf","%s\\n","hello");
+    test_parse("echo \\some\\path",2,"echo","\\some\\path",NULL);
+    test_parse("echo 'a\\ b'",2,"echo","a\\ b",NULL);
+    test_parse("echo \"a\\\"b\"",2,"echo","a\"b",NULL);
     test_parse("echo \"\" xyz",3,"echo","","xyz");
     test_parse("echo 'unterminated",-1,NULL,NULL,NULL);
     test_parse("",0,NULL,NULL,NULL);

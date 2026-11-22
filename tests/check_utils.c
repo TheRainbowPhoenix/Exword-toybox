@@ -9,6 +9,7 @@ struct fixture {const char *path;const unsigned char *data;unsigned size;int dir
 static const unsigned char a[]="alpha\nbeta\nbeta\ngamma\n";
 static const unsigned char b[]="beta\ngamma\nzeta\n";
 static const unsigned char pairs[]="ab:cd:ef\nxx:yy:zz\n";
+static const unsigned char sparse[]="a::c\n";
 static const unsigned char tabbed[]="a\tb\n";
 static const unsigned char one[]="abc\n";
 static const unsigned char longer[]="abcdef\n";
@@ -20,6 +21,7 @@ static const struct fixture fs[]={
     {"\\\\drv0\\a.txt",a,sizeof a-1,0},
     {"\\\\drv0\\b.txt",b,sizeof b-1,0},
     {"\\\\drv0\\pairs.txt",pairs,sizeof pairs-1,0},
+    {"\\\\drv0\\sparse.txt",sparse,sizeof sparse-1,0},
     {"\\\\drv0\\tab.txt",tabbed,sizeof tabbed-1,0},
     {"\\\\drv0\\one.txt",one,sizeof one-1,0},
     {"\\\\drv0\\long.txt",longer,sizeof longer-1,0},
@@ -107,6 +109,8 @@ int main(void)
     assert(run("nl",3,nl)==0 && !strcmp(out,"1\tabc\n"));
     const char *cut[]={"cut","-d",":","-f","1,3","pairs.txt"};
     assert(run("cut",6,cut)==0 && !strcmp(out,"ab:ef\nxx:zz\n"));
+    const char *cut_empty[]={"cut","-d",":","-f","2,3","sparse.txt"};
+    assert(run("cut",6,cut_empty)==0 && !strcmp(out,":c\n"));
     const char *cut_chars[]={"cut","-c1-2","one.txt"};
     assert(run("cut",3,cut_chars)==0 && !strcmp(out,"ab\n"));
     const char *cut_bad[]={"cut","-c0","one.txt"};

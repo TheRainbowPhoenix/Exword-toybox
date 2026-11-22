@@ -277,3 +277,12 @@ SHIFT with calculator punctuation keys adds symbols such as \`{}\`, \`_\`,
 \`SYM\` to switch between two pages of three 10-key rows, exposing digits,
 quotes, brackets, and other ASCII punctuation. The on-screen keyboard stays
 hidden by default unless explicitly toggled with AUDIO/LAYOUT.
+
+
+### Quoting and escape handling
+
+The command parser preserves backslash sequences inside single quotes and
+preserves normal format escapes (\`\\n\`, \`\\t\`) inside double quotes so
+\`printf '%s\n' value\` and \`tr -d '\n' text.txt\` can work. Unquoted
+backslashes before ordinary filename letters remain intact for EX-word
+native paths; unquoted backslashes before spaces or quotes escape them.

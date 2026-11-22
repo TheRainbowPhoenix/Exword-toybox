@@ -180,13 +180,19 @@ static int app_cut(const struct shell_api *sh)
             for(unsigned j=0;j<len;j++)if(line[j]==delim)has_delim=1;
             if(!has_delim) {
                 memcpy(out,line,len);n=len;
-            }else for(unsigned j=0;j<=len;j++) {
-                if(j==len || line[j]==delim) {
-                    if(field<256 && picks[field]) {
-                        if(n)out[n++]=delim;
-                        if(j>begin) {memcpy(out+n,line+begin,j-begin);n+=j-begin;}
+            }else {
+                int emitted=0;
+                for(unsigned j=0;j<=len;j++) {
+                    if(j==len || line[j]==delim) {
+                        if(field<256 && picks[field]) {
+                            if(emitted)out[n++]=delim;
+                            if(j>begin) {
+                                memcpy(out+n,line+begin,j-begin);n+=j-begin;
+                            }
+                            emitted=1; /* Preserve selected empty fields. */
+                        }
+                        begin=j+1;field++;
                     }
-                    begin=j+1;field++;
                 }
             }
         }
