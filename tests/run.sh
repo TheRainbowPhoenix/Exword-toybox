@@ -9,7 +9,7 @@ cc -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude \
 /tmp/toybox-name-tests
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   -Itests/stubs -Iinclude -Isrc \
-  src/base.c src/text.c src/editors.c
+  src/base.c src/text.c src/busybox_text.c src/editors.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   '-DEDL_APPID="TOYBX"' -Itests/stubs -Iinclude -Isrc \
   src/host.c src/host_fs.c src/names.c
@@ -18,9 +18,14 @@ cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
   -Dedl_main=text_edl_main -Dshell_commands=text_commands -c src/text.c -o /tmp/toybox-text.o
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  -c src/busybox_text.c -o /tmp/toybox-busybox.o
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
   -Dedl_main=editor_edl_main -Dshell_commands=editor_commands -c src/editors.c -o /tmp/toybox-editors.o
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
-  tests/check_modules.c /tmp/toybox-base.o /tmp/toybox-text.o /tmp/toybox-editors.o \
+  tests/check_modules.c /tmp/toybox-base.o /tmp/toybox-text.o /tmp/toybox-busybox.o /tmp/toybox-editors.o \
   -o /tmp/toybox-module-tests
 /tmp/toybox-module-tests
 python3 tools/check_sources.py
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  tests/check_busybox.c src/busybox_text.c -o /tmp/toybox-busybox-tests
+/tmp/toybox-busybox-tests

@@ -68,6 +68,7 @@ foreach(bundle IN ITEMS base editors text)
   add_edl(${bundle} "src/${bundle}.c")
   target_include_directories(${bundle} PRIVATE include src)
 endforeach()
+target_sources(text PRIVATE src/busybox_text.c)
 
 if(SHELL_BUILD_PACKAGES)
   if(NOT EXWORD_METADATA_SOURCE)

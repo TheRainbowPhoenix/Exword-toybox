@@ -5,7 +5,7 @@ root = Path(__file__).resolve().parents[1]
 modules = {
     'base': {'ls', 'cat', 'echo', 'cp', 'mv', 'rm', 'touch', 'mkdir', 'rmdir', 'date', 'true'},
     'editors': {'vi', 'nano'},
-    'text': {'wc', 'head', 'grep'},
+    'text': {'wc', 'head', 'grep', 'basename', 'dirname', 'uniq', 'sort', 'tail'},
 }
 for name, expected in modules.items():
     source = (root/'src'/f'{name}.c').read_text()

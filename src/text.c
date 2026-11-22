@@ -2,8 +2,8 @@
 #include "shell_format.h"
 __attribute__((used,section(".edl.cmd"),aligned(4)))
 const struct shell_manifest shell_commands={
-    .magic=SHELL_MANIFEST_MAGIC,.version=SHELL_MANIFEST_VERSION,.count=3,
-    .names={"wc","head","grep"}
+    .magic=SHELL_MANIFEST_MAGIC,.version=SHELL_MANIFEST_VERSION,.count=8,
+    .names={"wc","head","grep","basename","dirname","uniq","sort","tail"}
 };
 static int wc(const struct shell_api *sh)
 {
@@ -88,6 +88,7 @@ static int grep(const struct shell_api *sh)
     }
     return found?0:1;
 }
+int bb_text_main(const struct shell_api *sh);
 int edl_main(const struct edl_api *edl)
 {
     const struct shell_api *sh=shell_from_edl(edl);
@@ -95,5 +96,5 @@ int edl_main(const struct edl_api *edl)
     if (m_equal(sh->command,"wc")) return wc(sh);
     if (m_equal(sh->command,"head")) return head(sh);
     if (m_equal(sh->command,"grep")) return grep(sh);
-    return 127;
+    return bb_text_main(sh);
 }
