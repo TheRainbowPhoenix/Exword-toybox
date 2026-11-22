@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Host unit and syntax tests
-        run: ./tests/run.sh
+        run: bash tests/run.sh
   exword-build:
     runs-on: ubuntu-latest
     container:
