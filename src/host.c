@@ -5,6 +5,7 @@
 #include "shell_parse.h"
 #include "shell_keys.h"
 #include "shell_io.h"
+#include "shell_history.h"
 #include "shell_terminal.h"
 #include <gint/keycodes.h>
 #include <gint/display.h>
@@ -23,7 +24,8 @@
 #define BLUE  0x2273
 #define MUTED 0x8410
 static char content[EDL_PATH_MAX], cwd[EDL_PATH_MAX], image_path[EDL_PATH_MAX];
-static char input[SHELL_LINE_SIZE], previous[SHELL_LINE_SIZE];
+static char input[SHELL_LINE_SIZE];
+static struct shell_history history;
 static unsigned input_len,input_cursor;
 static int keyboard_visible, in_applet; /* default: physical keyboard */
 
@@ -233,6 +235,12 @@ static int read_key(void)
         if(key==SHELL_KEY_KBD_TOGGLE) {
             if(e.type==KEYEV_DOWN) {
                 keyboard_visible=!keyboard_visible;
+                if(in_applet) {
+                    /* Never paint the shell over an editor's own framebuffer.
+                       Let the applet repaint immediately using tty_size(). */
+                    if(keyboard_visible) { draw_keyboard(); dupdate(); }
+                    return SHELL_KEY_REDRAW;
+                }
                 draw_terminal();
             }
             continue;
@@ -463,7 +471,15 @@ static int run_command(char *line)
     }
     if (ci_equal(argv[0],"pwd")) { println(cwd); return 0; }
     if (ci_equal(argv[0],"clear")) { shell_term_init();return 0; }
-    if (ci_equal(argv[0],"history")) { println(previous); return 0; }
+    if (ci_equal(argv[0],"history")) {
+        for(unsigned i=0;i<shell_history_count(&history);i++) {
+            char prefix[16];
+            snprintf(prefix,sizeof prefix,"%u  ",i+1);
+            print(prefix);
+            println(shell_history_get(&history,i));
+        }
+        return 0;
+    }
     if (ci_equal(argv[0],"help")) { show_help(); return 0; }
     if (ci_equal(argv[0],"keyscan")) { scan_keys(); return 0; }
     if (ci_equal(argv[0],"modules")) {
@@ -509,6 +525,7 @@ static int run_command(char *line)
 int main(void)
 {
     shell_term_init();
+    shell_history_init(&history);
     dclear(DARK); dtext(20,22,WHITE,"Toybox: initializing Edelweiss..."); dupdate();
     int rc=edl_profile_init();
     if (rc) {
@@ -534,7 +551,7 @@ int main(void)
         int key=read_key();
         if (key==SHELL_KEY_ENTER) {
             input[input_len]=0;
-            if (input_len) memcpy(previous,input,input_len+1);
+            shell_history_push(&history,input); /* Before parser tokenizes it. */
             print("EX> "); println(input);
             input_len=input_cursor=0;
             int rc=run_command(input);
@@ -550,11 +567,15 @@ int main(void)
             if(input_cursor)input_cursor--;
         } else if (key==SHELL_KEY_RIGHT) {
             if(input_cursor<input_len)input_cursor++;
-        } else if (key==SHELL_KEY_ESC || key==SHELL_KEY_DOWN) {
+        } else if (key==SHELL_KEY_ESC) {
             input_len=input_cursor=0;input[0]=0;
-        } else if (key==SHELL_KEY_UP) {
-            strncpy(input,previous,sizeof input-1); input[sizeof input-1]=0;
-            input_len=input_cursor=(unsigned)strlen(input);
+        } else if (key==SHELL_KEY_UP || key==SHELL_KEY_DOWN) {
+            const char *line=key==SHELL_KEY_UP ?
+                shell_history_up(&history,input):shell_history_down(&history);
+            if(line) {
+                strncpy(input,line,sizeof input-1); input[sizeof input-1]=0;
+                input_len=input_cursor=(unsigned)strlen(input);
+            }
         } else if ((key=='\t' || (key>=32 && key<127)) &&
                    input_len+1<sizeof input) {
             memmove(input+input_cursor+1,input+input_cursor,

@@ -11,7 +11,8 @@ static int app_hexdump(const struct shell_api *sh)
     if(sh->argc!=2) return m_usage(sh,"usage: hexdump FILE");
     int fd=sp_open(sh->argv[1],SP_O_RDONLY);
     if(fd<0) return m_usage(sh,"hexdump: cannot open file");
-    unsigned char bytes[16];
+    enum { WIDTH=12 }; /* 12 fits 64-column EX-word terminal. */
+    unsigned char bytes[WIDTH];
     uint32_t off=0;
     int got;
     while((got=sp_read(fd,bytes,sizeof bytes))>0) {
@@ -19,17 +20,17 @@ static int app_hexdump(const struct shell_api *sh)
         unsigned n=0;
         for(int i=7;i>=0;i--)line[n++]=digits[(off>>(i*4))&15];
         line[n++]=' ';line[n++]=' ';
-        for(int i=0;i<16;i++) {
+        for(int i=0;i<WIDTH;i++) {
             if(i<got) {
                 line[n++]=digits[bytes[i]>>4];
                 line[n++]=digits[bytes[i]&15];
             }else{line[n++]=' ';line[n++]=' ';}
             line[n++]=' ';
         }
-        line[n++]='|';
+        line[n++]=' '; /* ASCII preview without trailing | border. */
         for(int i=0;i<got;i++)
             line[n++]=bytes[i]>=32&&bytes[i]<127?(char)bytes[i]:'.';
-        line[n++]='|';line[n++]='\n';
+        line[n++]='\n';
         if(write_all(line,n)) {sp_close(fd);return 1;}
         off+=(uint32_t)got;
     }

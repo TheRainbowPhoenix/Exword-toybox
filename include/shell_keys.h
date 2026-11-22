@@ -11,6 +11,7 @@
 #define SHELL_KEY_PAGEUP      0x107
 #define SHELL_KEY_PAGEDOWN    0x108
 #define SHELL_KEY_KBD_TOGGLE  0x109
+#define SHELL_KEY_REDRAW      0x10a /* Editor repaint after touch panel change */
 /* Translate gint's EX-word keycodes and held SHIFT/ALPHA modifiers. 
    Returns 0 for an unmapped key; pure function suitable for host tests. */
 int shell_key_translate(int code, int shift, int alpha);

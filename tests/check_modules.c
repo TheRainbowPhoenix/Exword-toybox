@@ -16,6 +16,8 @@ static unsigned copied_n;
 static int created;
 static const int *keys;
 static unsigned key_index;
+static int test_keyboard_visible;
+static unsigned full_editor_frames, compact_editor_frames;
 static void output_reset(void) {outn=0;output[0]=0;}
 static int mock_console(const void *s,unsigned n)
 {
@@ -63,14 +65,28 @@ static int mock_list(const char *path,unsigned first,struct shell_dirent *out,un
     return 2;
 }
 static void mock_rect(int x,int y,int w,int h,uint16_t color)
-{(void)x;(void)y;(void)w;(void)h;(void)color;}
+{
+    (void)color;
+    if(x==0 && y==0 && w==528) {
+        if(h==320)full_editor_frames++;
+        if(h==205)compact_editor_frames++;
+    }
+}
 static void mock_text(int x,int y,uint16_t color,const char *s)
 {(void)x;(void)y;(void)color;(void)s;}
 static void mock_present(void) {}
 static int mock_key(void)
 {
     assert(keys!=NULL && key_index<80);
-    return keys[key_index++];
+    int key=keys[key_index++];
+    if(key==SHELL_KEY_REDRAW) test_keyboard_visible=!test_keyboard_visible;
+    return key;
+}
+static int mock_tty_size(unsigned *cols,unsigned *rows)
+{
+    *cols=64;
+    *rows=test_keyboard_visible?14:24;
+    return 0;
 }
 static void setup(void)
 {
@@ -90,6 +106,7 @@ static void setup(void)
     sh.file_write=mock_write;
     sh.list_dir=mock_list;
     sh.read_key=mock_key;
+    sh.tty_size=mock_tty_size;
 }
 static int run(int (*f)(const struct edl_api *),const char *cmd,
                int argc,const char *const argv[])
@@ -106,6 +123,13 @@ int main(void)
     const char *dump[]={"hexdump","notes.txt"};
     assert(run(text_edl_main,"hexdump",2,dump)==0);
     assert(strstr(output,"68 65 6c 6c 6f")!=NULL);
+    const char *hexline=output;
+    for(int row=0;row<2;row++) {
+        const char *lf=strchr(hexline,'\n');
+        assert(lf && lf-hexline<=64 && lf>hexline && lf[-1]!='|');
+        hexline=lf+1;
+    }
+    assert(*hexline==0);
     const char *more[]={"more","notes.txt"};
     assert(run(text_edl_main,"more",2,more)==0);
     assert(strstr(output,"hello world")!=NULL);
@@ -119,14 +143,52 @@ int main(void)
     const char *wc[]={"wc","copy.txt"};
     assert(run(text_edl_main,"wc",2,wc)==0);
     assert(strstr(output,"2 4 24 copy.txt")!=NULL);
+    const char *wc_l[]={"wc","-l","copy.txt"};
+    assert(run(text_edl_main,"wc",3,wc_l)==0);
+    assert(!strcmp(output,"2 copy.txt\n"));
+    const char *wc_w[]={"wc","-wc","copy.txt"};
+    assert(run(text_edl_main,"wc",3,wc_w)==0);
+    assert(!strcmp(output,"4 24 copy.txt\n"));
+    const char *wc_two[]={"wc","-l","copy.txt","notes.txt"};
+    assert(run(text_edl_main,"wc",4,wc_two)==0);
+    assert(strstr(output,"2 copy.txt\n") && strstr(output,"2 notes.txt\n"));
+    assert(strstr(output,"4 total\n"));
+    const char *wc_bad[]={"wc","-q","copy.txt"};
+    assert(run(text_edl_main,"wc",3,wc_bad)!=0);
     const char *head[]={"head","copy.txt"};
     assert(run(text_edl_main,"head",2,head)==0);
     assert(!strcmp(output,"hello world\nsecond line\n"));
-    const int keyseq[]={ 'i', 'H', SHELL_KEY_ESC, ':','w','q',SHELL_KEY_ENTER };
+    const char *head_n[]={"head","-n","1","copy.txt"};
+    assert(run(text_edl_main,"head",4,head_n)==0);
+    assert(!strcmp(output,"hello world\n"));
+    const char *head_attached[]={"head","-n1","copy.txt"};
+    assert(run(text_edl_main,"head",3,head_attached)==0);
+    assert(!strcmp(output,"hello world\n"));
+    const char *head_bytes[]={"head","-c","5","copy.txt"};
+    assert(run(text_edl_main,"head",4,head_bytes)==0);
+    assert(!strcmp(output,"hello"));
+    const char *head_zero[]={"head","-n0","copy.txt"};
+    assert(run(text_edl_main,"head",3,head_zero)==0);
+    assert(output[0]==0);
+    const char *tail_n[]={"tail","-n","1","copy.txt"};
+    assert(run(text_edl_main,"tail",4,tail_n)==0);
+    assert(!strcmp(output,"second line\n"));
+    const char *tail_attached[]={"tail","-n1","copy.txt"};
+    assert(run(text_edl_main,"tail",3,tail_attached)==0);
+    assert(!strcmp(output,"second line\n"));
+    const char *tail_bytes[]={"tail","-c","5","copy.txt"};
+    assert(run(text_edl_main,"tail",4,tail_bytes)==0);
+    assert(!strcmp(output,"line\n"));
+    const char *tail_zero[]={"tail","-n0","copy.txt"};
+    assert(run(text_edl_main,"tail",3,tail_zero)==0 && !output[0]);
+    const int keyseq[]={ 'i', 'H', SHELL_KEY_REDRAW, SHELL_KEY_REDRAW,
+                          SHELL_KEY_ESC, ':','w','q',SHELL_KEY_ENTER };
     keys=keyseq;key_index=0;
     const char *vi[]={"vi","copy.txt"};
     assert(run(editor_edl_main,"vi",2,vi)==0);
-    assert(copied[0]=='H' && copied[1]=='h' && key_index==7);
-    puts("PASS: base/text multicall dispatch, file copy, grep/wc/head, vi save/return");
+    assert(copied[0]=='H' && copied[1]=='h' && key_index==9);
+    assert(full_editor_frames>=2 && compact_editor_frames>=1);
+    assert(!test_keyboard_visible);
+    puts("PASS: wc/head/tail option parsing, compact hexdump, editor toggle redraw");
     return 0;
 }

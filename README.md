@@ -180,3 +180,37 @@ separate volume-up/down rocker in \`keycodes.h\`. If the physical volume control
 does not toggle the touch-symbol panel, run \`keyscan\`, press the rocker,
 note the displayed hexadecimal code (if any), then press EXIT. This helps add
 the precise mapping for that device/firmware; unseen keys cannot be mapped.
+
+
+## Input, editor and text-command improvements
+
+The resident keeps **the eight most recent commands** in RAM. Use Up to
+rewind, Down to advance toward the newest command, and Down once more to
+restore the unfinished input you had before browsing. Run \`history\` to list
+the retained commands. Consecutive duplicate commands are not added twice.
+
+In \`vi\` / \`nano\` lite, AUDIO/LAYOUT now immediately triggers a **full editor
+repaint**, resizing the editor to 22 text rows when the touch-symbol keyboard
+is hidden or 13 rows while it is visible. This avoids the shell being painted
+over the editor when toggling the touch keyboard.
+
+\`head\` supports \`-n N\`, \`-nN\`, \`-c N\`, \`-cN\` and the default first ten lines
+(for example \`head -n 2 README.TXT\`). \`tail\` accepts the same numeric options
+for the last N lines/bytes, including \`tail -n2\`. \`wc\` supports \`-l\`, \`-w\`,
+\`-c\`, and combined flags such as \`wc -lw file.txt\`, plus multiple files
+with totals. The shell does not currently support Unix stdin pipes.
+
+\`hexdump\` prints **12 bytes per line** (offset, hexadecimal values, printable
+ASCII), with no trailing vertical bar, so each displayed row fits the EX-word
+terminal's 64-column width.
+
+### Add-in file contents and encoding
+
+If \`cat\` and \`hexdump\` work on normal user files but display scrambled bytes
+for some files *inside an add-in*, those particular files may be
+compressed, encrypted, transformed, or stored in an application-specific
+container. **Do not assume Shift-JIS or automatically decrypt an unknown file**:
+first compare the same file's raw bytes with EXWord-Explorer's hex viewer.
+The shell intentionally treats \`cat\` / \`hexdump\` as byte-oriented and does
+not decode encrypted or compressed dictionary content. ASCII text outside the
+add-in is the appropriate regression test for the native I/O implementation.

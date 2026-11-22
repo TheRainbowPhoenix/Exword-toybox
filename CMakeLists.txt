@@ -47,7 +47,7 @@ file(WRITE "${EDL_LINKER}" "${edl_script}")
 set(EDL_HOST_DIR "${edelweiss_SOURCE_DIR}/exword")
 add_executable(toybox
   src/host.c src/host_fs.c src/io_bridge.c src/keymap.c src/terminal.c
-  src/names.c src/manifest.c src/parser.c
+  src/names.c src/manifest.c src/parser.c src/history.c
   "${EDL_HOST_DIR}/fs.c" "${EDL_HOST_DIR}/paths.c"
   "${EDL_HOST_DIR}/profile.c" "${EDL_HOST_DIR}/firmware.c"
   "${EDL_HOST_DIR}/scratch.c" "${EDL_HOST_DIR}/read_cache.c"

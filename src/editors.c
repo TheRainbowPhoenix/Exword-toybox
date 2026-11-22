@@ -4,7 +4,8 @@
 #include "module_util.h"
 #include "shell_format.h"
 #define MAX_TEXT 32768u
-#define SCREEN_LINES 13u
+#define SCREEN_LINES_SMALL 13u
+#define SCREEN_LINES_LARGE 22u
 #define COLS 63u
 #define INK 0x0841
 #define WHITE 0xffff
@@ -63,14 +64,20 @@ static void move_vertical(int direction)
 }
 static void draw_editor(void)
 {
+    unsigned cols=64, rows=14;
+    /* tty_size reflects the resident touch keyboard visibility.
+       The editor owns the entire 320px screen when it is hidden. */
+    if(sh->tty_size) sh->tty_size(&cols,&rows);
+    unsigned visible=rows>=24?SCREEN_LINES_LARGE:SCREEN_LINES_SMALL;
+    int status_y=visible==SCREEN_LINES_LARGE?289:181;
     unsigned line=lines_before(cursor);
     if (line<top_line) top_line=line;
-    if (line>=top_line+SCREEN_LINES) top_line=line-SCREEN_LINES+1;
-    sh->edl.rect(0,0,528,205,WHITE);
+    if (line>=top_line+visible) top_line=line-visible+1;
+    sh->edl.rect(0,0,528,visible==SCREEN_LINES_LARGE?320:205,WHITE);
     sh->edl.rect(0,0,528,18,BAR);
     sh->edl.text(6,3,WHITE,nano?"nano-lite  ESC: Exit":"vi-lite  i: insert   :wq: save+quit");
     unsigned at=line_start_for(top_line),cur_line=top_line;
-    for (unsigned row=0;row<SCREEN_LINES;row++,cur_line++) {
+    for (unsigned row=0;row<visible;row++,cur_line++) {
         char text[COLS+1];unsigned n=0;
         unsigned start=at;
         while (at<len && data[at]!='\n') {
@@ -88,14 +95,14 @@ static void draw_editor(void)
         }
         if (at<len && data[at]=='\n') at++;
     }
-    sh->edl.rect(0,181,528,23,0xe71c);
+    sh->edl.rect(0,status_y,528,23,0xe71c);
     if (command_mode) {
         char prompt[30]={':' }; /* overwritten below for consistency */
         prompt[0]=':';
         for (unsigned i=0;i<colon_len && i<sizeof prompt-2;i++) prompt[i+1]=colon[i];
-        sh->edl.text(8,186,INK,prompt);
-    } else if (message[0]) sh->edl.text(8,186,INK,message);
-    else sh->edl.text(8,186,INK,nano?"ESC: save / discard / cancel":
+        sh->edl.text(8,status_y+5,INK,prompt);
+    } else if (message[0]) sh->edl.text(8,status_y+5,INK,message);
+    else sh->edl.text(8,status_y+5,INK,nano?"ESC: save / discard / cancel":
                       insert_mode?"-- INSERT --  ESC: normal":"-- NORMAL --");
     sh->edl.present();
 }
@@ -138,10 +145,12 @@ static int editor_loop(void)
     for (;;) {
         draw_editor();
         int key=sh->read_key();
+        if (key==SHELL_KEY_REDRAW) continue;
         if (nano && key==SHELL_KEY_ESC) {
             set_message("Exit? S=save D=discard C=cancel");
             draw_editor();
             int choice=sh->read_key();
+            if (choice==SHELL_KEY_REDRAW) continue;
             if (choice=='s'||choice=='S') {if (save()==0) return 0;}
             else if (choice=='d'||choice=='D') return 0;
             else set_message("");

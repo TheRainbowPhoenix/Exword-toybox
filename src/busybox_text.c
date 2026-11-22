@@ -295,11 +295,21 @@ static int bb_tail(const struct shell_api *sh)
 {
     int i=1, bytes=0;
     unsigned count=10;
-    if (i<sh->argc && (m_equal(sh->argv[i],"-n")||m_equal(sh->argv[i],"-c"))) {
-        bytes=m_equal(sh->argv[i],"-c");
-        if (i+1>=sh->argc || bb_number(sh->argv[i+1],&count))
-            return m_usage(sh,"tail: bad count");
-        i+=2;
+    for(;i<sh->argc;i++) {
+        const char *arg=sh->argv[i];
+        if(m_equal(arg,"--")) {i++;break;}
+        if(arg[0]!='-' || !arg[1])break;
+        if(arg[1]=='n' || arg[1]=='c') {
+            bytes=(arg[1]=='c');
+            const char *number=arg+2;
+            if(!*number) {
+                if(++i>=sh->argc) return m_usage(sh,"tail: missing count");
+                number=sh->argv[i];
+            }
+            if(bb_number(number,&count))return m_usage(sh,"tail: bad count");
+        } else if(!bb_number(arg+1,&count)) {
+            bytes=0; /* historical tail -2 shorthand */
+        } else return m_usage(sh,"usage: tail [-n N|-c N] FILE");
     }
     if (sh->argc-i!=1) return m_usage(sh,"usage: tail [-n N|-c N] FILE");
     struct bb_reader r;

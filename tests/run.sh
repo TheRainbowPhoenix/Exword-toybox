@@ -12,7 +12,7 @@ cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   src/base.c src/text.c src/busybox_text.c src/editors.c src/posix.c src/posix_tools.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   '-DEDL_APPID="TOYBX"' -Itests/stubs -Iinclude -Isrc \
-  src/host.c src/host_fs.c src/names.c src/keymap.c src/terminal.c src/io_bridge.c
+  src/host.c src/host_fs.c src/names.c src/history.c src/keymap.c src/terminal.c src/io_bridge.c
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
   -Dedl_main=base_edl_main -Dshell_commands=base_commands -c src/base.c -o /tmp/toybox-base.o
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc -c src/posix.c -o /tmp/toybox-posix.o
@@ -45,3 +45,6 @@ cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude src/io_bridge.c tests/
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude \
   tests/check_compat.c -o /tmp/toybox-compat-tests
 /tmp/toybox-compat-tests
+cc -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude \
+  src/history.c tests/check_history.c -o /tmp/toybox-history-tests
+/tmp/toybox-history-tests
