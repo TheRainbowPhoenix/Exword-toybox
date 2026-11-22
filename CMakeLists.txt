@@ -65,11 +65,12 @@ set_target_properties(toybox PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY
 generate_d01(TARGET toybox OUTPUT "${CMAKE_BINARY_DIR}/${EXWORD_MODULE}.d01"
   MODULE "${EXWORD_MODULE}")
 
-foreach(bundle IN ITEMS base editors text)
+foreach(bundle IN ITEMS base editors text utils)
   add_edl(${bundle} "src/${bundle}.c")
   target_include_directories(${bundle} PRIVATE include src)
 endforeach()
 target_sources(text PRIVATE src/busybox_text.c src/posix_tools.c)
+target_sources(utils PRIVATE src/utils_io.c src/utils_text.c src/utils_misc.c)
 target_sources(base PRIVATE src/posix.c)
 target_sources(text PRIVATE src/posix.c)
 
@@ -91,8 +92,10 @@ if(SHELL_BUILD_PACKAGES)
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:text>" "${CMAKE_BINARY_DIR}/packages/${locale}/${EXWORD_APP_ID}/text.edl"
       COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:utils>" "${CMAKE_BINARY_DIR}/packages/${locale}/${EXWORD_APP_ID}/utils.edl"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/COPYING.BUSYBOX"
         "${CMAKE_BINARY_DIR}/packages/${locale}/${EXWORD_APP_ID}/COPYING.TXT"
-      DEPENDS toybox_package_${locale} base editors text VERBATIM)
+      DEPENDS toybox_package_${locale} base editors text utils VERBATIM)
   endforeach()
 endif()

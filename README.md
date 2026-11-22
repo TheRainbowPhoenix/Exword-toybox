@@ -10,6 +10,8 @@ TOYBX/_CONTENT/
     base.edl        ls cat echo cp mv rm touch mkdir rmdir date true
     editors.edl     editable vi-lite and nano-lite modes (32 KiB max file)
     text.edl        wc head grep basename dirname uniq sort tail more hexdump
+    utils.edl       rev tac nl cut tr strings comm paste fold expand
+                    seq cmp cksum stat du find printf false
 ```
 
 A module declares an applet manifest as a **non-loaded** `.edl.cmd` ELF section,
@@ -222,3 +224,56 @@ packs NUL-terminated command names into a shared 256-byte pool (up to
 48 routes), and the native-world I/O bridge copies data through a 128-byte
 resident staging buffer. The command-history pool is 512 bytes. These limits
 are independent of the maximum 128 KiB \`.d01\` file size.
+
+
+## Expanded EX-word utility applets
+
+The optional \`utils.edl\` package contains **18 BusyBox-style commands**:
+\`rev\`, \`tac\`, \`nl\`, \`cut\`, \`tr\`, \`strings\`, \`comm\`, \`paste\`, \`fold\`,
+\`expand\`, \`seq\`, \`cmp\`, \`cksum\`, \`stat\`, \`du\`, \`find\`, \`printf\`, and
+\`false\`. These implementations were written for the EX-word/Edelweiss ABI
+and are **not copied source code from BusyBox**. The earlier five source-level
+BusyBox-derived ports and their GPL-2 terms are still present.
+
+Examples (use filenames with the device's actual 8.3 conventions):
+
+\`\`\`text
+cut -d : -f 1,3 data.txt
+cut -c1-8 data.txt
+tr a-z A-Z data.txt
+tr -d X data.txt
+rev notes.txt
+tac notes.txt
+nl -ba notes.txt
+strings -n 5 blob.dat
+comm -12 sorted1.txt sorted2.txt
+paste -d , left.txt right.txt
+fold -w 48 notes.txt
+expand -t 4 notes.txt
+seq 1 2 9
+cmp -s first.txt second.txt
+cksum notes.txt
+stat notes.txt
+du -a .
+find . -name *.txt -type f
+printf '%s %d\n' page 12
+false
+\`\`\`
+
+They do **not** yet accept standard Unix stdin pipes or process features.
+\`cut\` accepts explicit lists of columns/fields 1–255; \`tr\` supports simple
+sets and ranges such as \`a-z\` (not locale or Unicode character classes);
+\`nl\`, \`rev\`, \`comm\`, \`paste\`, and \`cut\` have a maximum input line
+length of 255 bytes. \`seq\` limits output to 1000 numbers. \`find\` and
+\`du\` use **bounded native directory traversal** (8 levels / 1024 entries),
+and \`du\` counts logical file bytes, not allocated filesystem blocks.
+\`printf\` supports \`%s\`, \`%d\`, \`%u\`, \`%x\`, \`%X\`, \`%c\`, and \`%%\` without
+width/precision specifiers. These restrictions are intentional until a more
+complete POSIX/libbb compatibility layer is available.
+
+The physical EX-word keyboard supports SHIFT+ALPHA+Q..P for \`!@#$%^&*()\`;
+SHIFT with calculator punctuation keys adds symbols such as \`{}\`, \`_\`,
+\`|\`, \`?\`, \`<\`, and \`>\`. When the touch-symbol keyboard is shown, tap
+\`SYM\` to switch between two pages of three 10-key rows, exposing digits,
+quotes, brackets, and other ASCII punctuation. The on-screen keyboard stays
+hidden by default unless explicitly toggled with AUDIO/LAYOUT.

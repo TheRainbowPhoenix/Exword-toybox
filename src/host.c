@@ -29,6 +29,7 @@ static char input[SHELL_LINE_SIZE];
 static struct shell_history history;
 static unsigned input_len,input_cursor;
 static int keyboard_visible, in_applet; /* default: physical keyboard */
+static unsigned symbol_page;
 
 /* Every EDL is adjacent to content: keep only the 8.3 basename. */
 struct module { char name[13]; };
@@ -145,24 +146,24 @@ static unsigned terminal_height(void) { return keyboard_visible ? 14u : 24u; }
 /* Most printable keys are now physical. Touch supplies missing symbols only. */
 static void draw_keyboard(void)
 {
-    static const char *rows[2]={"1234567890",".,/-\\:;?=+"};
+    static const char *buttons[]={"SPACE","TAB","ESC","DEL","ENTER","SYM"};
+    static const int widths[]={94,60,65,60,100,85};
     drect(0,205,527,319,0x2104);
-    for (int row=0;row<2;row++) {
+    for (unsigned row=0;row<3;row++) {
         int x0=(528-10*52+4)/2;
-        for (int i=0;i<10;i++) {
-            int x=x0+i*52,y=210+row*26;
+        for (unsigned i=0;i<10;i++) {
+            int x=x0+(int)i*52,y=210+(int)row*26;
             drect(x,y,x+47,y+23,0xbdf7);
-            char label[2]={rows[row][i],0};
+            char label[2]={(char)shell_touch_symbol(symbol_page,row,i),0};
             dtext(x+18,y+7,DARK,label);
         }
     }
-    static const char *buttons[]={"SPACE","TAB","ESC","DEL","ENTER"};
-    static const int widths[]={115,80,78,90,112};
-    int x=15;
-    for(int i=0;i<5;i++) {
+    int x=12;
+    for(unsigned i=0;i<6;i++) {
         drect(x,289,x+widths[i]-1,316,0xe71c);
         dtext(x+8,298,DARK,buttons[i]);
-        x+=widths[i]+6;
+        if(i==5)dtext(x+62,298,DARK,symbol_page?"2":"1");
+        x+=widths[i]+5;
     }
 }
 static void draw_terminal(void)
@@ -198,22 +199,22 @@ static int console_write(const void *bytes,unsigned length)
 static int keyboard_hit(int x,int y)
 {
     if (!keyboard_visible) return 0;
-    if (y>=210 && y<262) {
-        static const char *rows[2]={"1234567890",".,/-\\:;?=+"};
+    if (y>=210 && y<288) {
         int row=(y-210)/26;
-        if (row>=2 || (y-210)%26>=24) return 0;
+        if(row>=3 || (y-210)%26>=24)return 0;
         int x0=(528-10*52+4)/2,idx=(x-x0)/52;
-        if (x<x0 || idx<0 || idx>=10 || (x-x0)%52>=48) return 0;
-        return rows[row][idx];
+        if(x<x0 || idx<0 || idx>=10 || (x-x0)%52>=48)return 0;
+        return shell_touch_symbol(symbol_page,(unsigned)row,(unsigned)idx);
     }
     if(y>=289 && y<=316) {
-        static const int widths[]={115,80,78,90,112};
+        static const int widths[]={94,60,65,60,100,85};
         static const int keys[]={' ','\t',SHELL_KEY_ESC,
-                                  SHELL_KEY_BACK,SHELL_KEY_ENTER};
-        int x0=15;
-        for (int i=0;i<5;i++) {
+                                  SHELL_KEY_BACK,SHELL_KEY_ENTER,
+                                  SHELL_KEY_SYMBOL_PAGE};
+        int x0=12;
+        for (int i=0;i<6;i++) {
             if(x>=x0 && x<x0+widths[i]) return keys[i];
-            x0+=widths[i]+6;
+            x0+=widths[i]+5;
         }
     }
     return 0;
@@ -226,6 +227,12 @@ static int read_key(void)
         if (e.type==KEYEV_NONE) continue;
         if (e.type==KEYEV_TOUCH_DOWN) {
             int key=keyboard_hit(e.x,e.y);
+            if(key==SHELL_KEY_SYMBOL_PAGE) {
+                symbol_page^=1u;
+                draw_keyboard(); dupdate();
+                if(in_applet)return SHELL_KEY_REDRAW;
+                continue;
+            }
             if(key) return key;
             continue;
         }

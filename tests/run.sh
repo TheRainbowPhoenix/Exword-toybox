@@ -9,7 +9,8 @@ cc -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude \
 /tmp/toybox-name-tests
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   -Itests/stubs -Iinclude -Isrc \
-  src/base.c src/text.c src/busybox_text.c src/editors.c src/posix.c src/posix_tools.c
+  src/base.c src/text.c src/busybox_text.c src/editors.c src/posix.c src/posix_tools.c \
+  src/utils.c src/utils_io.c src/utils_text.c src/utils_misc.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only \
   '-DEDL_APPID="TOYBX"' -Itests/stubs -Iinclude -Isrc \
   src/host.c src/host_fs.c src/names.c src/history.c src/keymap.c src/terminal.c src/io_bridge.c
@@ -48,3 +49,17 @@ cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude \
 cc -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude \
   src/history.c tests/check_history.c -o /tmp/toybox-history-tests
 /tmp/toybox-history-tests
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  -Dedl_main=utils_edl_main -Dshell_commands=utils_commands \
+  -c src/utils.c -o /tmp/toybox-utils.o
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  -c src/utils_io.c -o /tmp/toybox-utils-io.o
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  -c src/utils_text.c -o /tmp/toybox-utils-text.o
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  -c src/utils_misc.c -o /tmp/toybox-utils-misc.o
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  tests/check_utils.c /tmp/toybox-utils.o /tmp/toybox-utils-io.o \
+  /tmp/toybox-utils-text.o /tmp/toybox-utils-misc.o \
+  -o /tmp/toybox-utils-tests
+/tmp/toybox-utils-tests

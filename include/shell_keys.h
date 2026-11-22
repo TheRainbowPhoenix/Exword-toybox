@@ -12,7 +12,10 @@
 #define SHELL_KEY_PAGEDOWN    0x108
 #define SHELL_KEY_KBD_TOGGLE  0x109
 #define SHELL_KEY_REDRAW      0x10a /* Editor repaint after touch panel change */
+#define SHELL_KEY_SYMBOL_PAGE 0x10b /* Touch panel symbol-page button */
 /* Translate gint's EX-word keycodes and held SHIFT/ALPHA modifiers. 
    Returns 0 for an unmapped key; pure function suitable for host tests. */
 int shell_key_translate(int code, int shift, int alpha);
+/* ASCII symbol at touch panel position (page 0 or 1, row 0..2, col 0..9). */
+int shell_touch_symbol(unsigned page, unsigned row, unsigned col);
 #endif

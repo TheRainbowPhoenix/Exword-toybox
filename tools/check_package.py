@@ -9,7 +9,8 @@ module = sys.argv[3] if len(sys.argv) > 3 else "toybox"
 expected = {
     'base': {'ls','cat','echo','cp','mv','rm','touch','mkdir','rmdir','date','true'},
     'editors': {'vi','nano'},
-    'text': {'wc','head','grep','basename','dirname','uniq','sort','tail','more','hexdump'}
+    'text': {'wc','head','grep','basename','dirname','uniq','sort','tail','more','hexdump'},
+    'utils': {'rev','tac','nl','cut','tr','strings','comm','paste','fold','expand','seq','cmp','cksum','stat','du','find','printf','false'}
 }
 boot = build / f'{module}.d01'
 data = boot.read_bytes()

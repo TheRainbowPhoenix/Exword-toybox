@@ -8,8 +8,9 @@ int shell_key_translate(int key, int shift, int alpha)
     if (key >= KEY_EX_Q && key <= KEY_EX_M) {
         int i = key - KEY_EX_Q;
         if (alpha) {
-            if (key == KEY_EX_A) return '.';
-            if (i < 10) return "1234567890"[i];
+            if (key == KEY_EX_A) return shift ? ':' : '.';
+            if (i < 10) return shift ? "!@#$%^&*()"[i] :
+                                        "1234567890"[i];
         }
         char c = "qwertyuiopasdfghjklzxcvbnm"[i];
         return shift ? c - ('a'-'A') : c;
@@ -33,20 +34,32 @@ int shell_key_translate(int key, int shift, int alpha)
         /* The calculator-style 0 key is a convenient physical SPACE;
            SHIFT+0 is TAB when there's no dedicated tab key. */
         case KEY_0: return shift ? '\t' : ' ';
-        case KEY_DOT: return '.';
-        case KEY_COMMA: return ',';
-        case KEY_LEFTP: return '(';
-        case KEY_RIGHTP: return ')';
-        case KEY_ADD: return '+';
-        case KEY_SUB: return '-';
-        case KEY_MUL: return '*';
-        case KEY_DIV: return '/';
-        case KEY_POWER: return '^';
-        case KEY_FRAC: return '_';
-        case KEY_FD: return ':';
-        case KEY_ARROW: return '>';
-        case KEY_NEG: return '~';
-        case KEY_EXP: return '=';
+        case KEY_DOT: return shift ? '>' : '.';
+        case KEY_COMMA: return shift ? '<' : ',';
+        case KEY_LEFTP: return shift ? '{' : '(';
+        case KEY_RIGHTP: return shift ? '}' : ')';
+        case KEY_ADD: return shift ? '=' : '+';
+        case KEY_SUB: return shift ? '_' : '-';
+        case KEY_MUL: return shift ? '&' : '*';
+        case KEY_DIV: return shift ? '?' : '/';
+        case KEY_POWER: return shift ? '~' : '^';
+        case KEY_FRAC: return shift ? '|' : '_';
+        case KEY_FD: return shift ? ';' : ':';
+        case KEY_ARROW: return shift ? '<' : '>';
+        case KEY_NEG: return shift ? '`' : '~';
+        case KEY_EXP: return shift ? '!' : '=';
         default: return 0;
     }
+}
+
+/* Digits and all common punctuation are available across two touch pages.
+   The quote and backtick in the second page use C escapes for clarity. */
+int shell_touch_symbol(unsigned page, unsigned row, unsigned col)
+{
+    static const char *const pages[2][3]={
+        { "1234567890", ".,/-\\:;?=+", "!@#$%^&*()" },
+        { "1234567890", "[]{}<>|'\"\x60", "_%~!@#$^&*" }
+    };
+    if(page>=2 || row>=3 || col>=10) return 0;
+    return pages[page][row][col];
 }
