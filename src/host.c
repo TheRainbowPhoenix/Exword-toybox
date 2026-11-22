@@ -14,7 +14,7 @@
 
 #define TERM_COLS 64
 #define TERM_ROWS 14
-#define MAX_ROUTES (SHELL_MAX_MODULES*SHELL_MAX_COMMANDS)
+#define MAX_ROUTES 48u /* shared command pool, not 24 names per module */
 #define WHITE 0xffff
 #define DARK  0x0841
 #define BLUE  0x2273
@@ -24,11 +24,10 @@ static char input[SHELL_LINE_SIZE], previous[SHELL_LINE_SIZE];
 static unsigned input_len, shift_mode, symbol_mode;
 static char scroll[TERM_ROWS][TERM_COLS+1];
 static unsigned scroll_row, scroll_col;
-struct module { char path[EDL_PATH_MAX]; struct shell_manifest manifest; };
-/* Routes refer to names already stored in module manifests (2 B vs 20 B). */
-struct route { uint8_t mod, app; };
-_Static_assert(SHELL_MAX_MODULES <= UINT8_MAX && SHELL_MAX_COMMANDS <= UINT8_MAX,
-               "route indices must fit in a byte");
+struct module { char path[EDL_PATH_MAX]; };
+/* Allocate names once in a shared registry, not in per-module fixed arrays. */
+struct route { char name[SHELL_NAME_SIZE]; uint8_t mod; };
+_Static_assert(SHELL_MAX_MODULES <= UINT8_MAX, "module indices must fit in a byte");
 static struct module modules[SHELL_MAX_MODULES];
 static struct route routes[MAX_ROUTES];
 static unsigned module_count, route_count;
@@ -389,15 +388,14 @@ static int add_module(const char *filename)
     if (shell_manifest_read(read_manifest_bytes,path,(uint32_t)size,&manifest)) return -1;
     for (unsigned i=0;i<manifest.count;i++)
         for (unsigned j=0;j<route_count;j++)
-            if (ci_equal(manifest.names[i],modules[routes[j].mod].manifest.names[routes[j].app])) return -1;
+            if (ci_equal(manifest.names[i],routes[j].name)) return -1;
     if (route_count+manifest.count>MAX_ROUTES) return -1;
     unsigned m=module_count++;
     memcpy(modules[m].path,path,strlen(path)+1);
-    modules[m].manifest=manifest;
     for (unsigned i=0;i<manifest.count;i++) {
         struct route *r=&routes[route_count++];
+        memcpy(r->name,manifest.names[i],SHELL_NAME_SIZE);
         r->mod=(uint8_t)m;
-        r->app=(uint8_t)i;
     }
     return 0;
 }
@@ -425,7 +423,7 @@ static void show_help(void)
     println("builtins: cd pwd help clear history modules exit");
     print("applets: ");
     for (unsigned i=0;i<route_count;i++) {
-        print(modules[routes[i].mod].manifest.names[routes[i].app]);
+        print(routes[i].name);
         print((i+1)%6==0?"\n":" ");
     }
     new_line();
@@ -453,7 +451,7 @@ static int run_command(char *line)
         return 0;
     }
     for (unsigned i=0;i<route_count;i++) {
-        if (!ci_equal(argv[0],modules[routes[i].mod].manifest.names[routes[i].app])) continue;
+        if (!ci_equal(argv[0],routes[i].name)) continue;
         const char *path=modules[routes[i].mod].path;
         memcpy(image_path,path,strlen(path)+1);
         api.command=argv[0]; api.argc=argc; api.argv=argv;
