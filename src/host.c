@@ -24,10 +24,11 @@
 #define MUTED 0x8410
 static char content[EDL_PATH_MAX], cwd[EDL_PATH_MAX], image_path[EDL_PATH_MAX];
 static char input[SHELL_LINE_SIZE], previous[SHELL_LINE_SIZE];
-static unsigned input_len;
+static unsigned input_len,input_cursor;
 static int keyboard_visible, in_applet; /* default: physical keyboard */
 
-struct module { char path[EDL_PATH_MAX]; };
+/* Every EDL is adjacent to content: keep only the 8.3 basename. */
+struct module { char name[13]; };
 /* Allocate names once in a shared registry, not in per-module fixed arrays. */
 struct route { char name[SHELL_NAME_SIZE]; uint8_t mod; };
 _Static_assert(SHELL_MAX_MODULES <= UINT8_MAX, "module indices must fit in a byte");
@@ -35,7 +36,6 @@ static struct module modules[SHELL_MAX_MODULES];
 static struct route routes[MAX_ROUTES];
 static unsigned module_count, route_count;
 static struct shell_api api;
-static char command_line[SHELL_LINE_SIZE];
 
 static int ci_equal(const char *a, const char *b)
 {
@@ -172,10 +172,14 @@ static void draw_terminal(void)
     int prompt_y=keyboard_visible?185:301;
     drect(0,prompt_y-4,527,prompt_y+15,0x3186);
     char prompt[SHELL_TERM_COLS+1]="EX> ";
-    unsigned visible=input_len>58?58:input_len;
-    memcpy(prompt+4,input+input_len-visible,visible);
+    unsigned start=input_cursor>58?input_cursor-58:0;
+    unsigned visible=input_len-start;
+    if(visible>58)visible=58;
+    memcpy(prompt+4,input+start,visible);
     prompt[4+visible]=0;
     dtext(8,prompt_y,WHITE,prompt);
+    unsigned cursor_x=8+(4+input_cursor-start)*8;
+    drect((int)cursor_x,prompt_y+12,(int)cursor_x+6,prompt_y+13,WHITE);
     if (shell_term_back()) dtext(430,prompt_y,WHITE,"PGDN");
     if (keyboard_visible) draw_keyboard();
     dupdate();
@@ -358,13 +362,13 @@ static int content_location(void)
     if (edl_content_id(id,appid,order)) memcpy(appid,EDL_APPID,sizeof EDL_APPID);
     const char *preferred=id[0]=='c' ? (id[1]=='1'?"\\\\crd1\\":"\\\\crd0\\") : "\\\\drv0\\";
     int best=0;
-    struct edl_record rows[8];
-    int total=edl_scan(0,rows,8);
+    struct edl_record rows[4];
+    int total=edl_scan(0,rows,4);
     if (total<=0) return -1;
-    for (unsigned first=0;first<(unsigned)total;first+=8) {
-        int rc=edl_scan(first,rows,8);
+    for (unsigned first=0;first<(unsigned)total;first+=4) {
+        int rc=edl_scan(first,rows,4);
         if (rc<0) return -1;
-        for (unsigned i=0;i<8 && first+i<(unsigned)total;i++) {
+        for (unsigned i=0;i<4 && first+i<(unsigned)total;i++) {
             const char *path=rows[i].path;
             if (!contains_app(path,appid)) continue;
             const char *last=strrchr(path,'\\');
@@ -380,7 +384,7 @@ static int content_location(void)
 }
 static int add_module(const char *filename)
 {
-    if (!is_edl(filename) || module_count>=SHELL_MAX_MODULES) return -1;
+    if (!is_edl(filename) || strlen(filename)>12 || module_count>=SHELL_MAX_MODULES) return -1;
     char path[EDL_PATH_MAX];
     if (combine(path,content,filename)) return -1;
     int size=host_fs_size(path);
@@ -392,7 +396,7 @@ static int add_module(const char *filename)
             if (ci_equal(manifest.names[i],routes[j].name)) return -1;
     if (route_count+manifest.count>MAX_ROUTES) return -1;
     unsigned m=module_count++;
-    memcpy(modules[m].path,path,strlen(path)+1);
+    memcpy(modules[m].name,filename,strlen(filename)+1);
     for (unsigned i=0;i<manifest.count;i++) {
         struct route *r=&routes[route_count++];
         memcpy(r->name,manifest.names[i],SHELL_NAME_SIZE);
@@ -403,12 +407,12 @@ static int add_module(const char *filename)
 static void discover(void)
 {
     module_count=route_count=0;
-    struct shell_dirent entries[16];
-    int total=host_fs_list(content,0,entries,16);
+    struct shell_dirent entries[8];
+    int total=host_fs_list(content,0,entries,8);
     if (total<0) return;
-    for (unsigned first=0;first<(unsigned)total;first+=16) {
-        if (host_fs_list(content,first,entries,16)<0) break;
-        for (unsigned i=0;i<16 && first+i<(unsigned)total;i++)
+    for (unsigned first=0;first<(unsigned)total;first+=8) {
+        if (host_fs_list(content,first,entries,8)<0) break;
+        for (unsigned i=0;i<8 && first+i<(unsigned)total;i++)
             if (!entries[i].directory) add_module(entries[i].name);
     }
 }
@@ -446,15 +450,13 @@ static int run_command(char *line)
     if (ci_equal(argv[0],"help")) { show_help(); return 0; }
     if (ci_equal(argv[0],"modules")) {
         for (unsigned i=0;i<module_count;i++) {
-            const char *leaf=strrchr(modules[i].path,'\\');
-            println(leaf?leaf+1:modules[i].path);
+            println(modules[i].name);
         }
         return 0;
     }
     for (unsigned i=0;i<route_count;i++) {
         if (!ci_equal(argv[0],routes[i].name)) continue;
-        const char *path=modules[routes[i].mod].path;
-        memcpy(image_path,path,strlen(path)+1);
+        if (combine(image_path,content,modules[routes[i].mod].name)) return -1;
         api.command=argv[0]; api.argc=argc; api.argv=argv;
         api.edl.arena_start=edl_active_arena.arena_start;
         api.edl.arena_end=edl_active_arena.arena_end;
@@ -505,7 +507,8 @@ int main(void)
     memcpy(cwd,content,strlen(content)+1);
     init_api(); discover();
     println("EX-word Toybox shell (experimental)");
-    println("Touch keyboard below. Type help for commands.");
+    println("Physical QWERTY; AUDIO=touch; PGUP/PGDN=scroll.");
+    println("DEL=backspace  EXIT=ESC  EXE=enter  0=space.");
     if (!module_count) println("No valid .edl command modules found.");
     for (;;) {
         draw_terminal();
@@ -514,18 +517,30 @@ int main(void)
             input[input_len]=0;
             if (input_len) memcpy(previous,input,input_len+1);
             print("EX> "); println(input);
-            memcpy(command_line,input,input_len+1);
-            input_len=0;input[0]=0;
-            if (run_command(command_line)==9999) break;
+            input_len=input_cursor=0;
+            int rc=run_command(input);
+            input[0]=0;
+            if (rc==9999) break;
         } else if (key==SHELL_KEY_BACK) {
-            if (input_len) input[--input_len]=0;
-        } else if (key==SHELL_KEY_ESC) {
-            input_len=0;input[0]=0;
+            if(input_cursor) {
+                memmove(input+input_cursor-1,input+input_cursor,
+                        input_len-input_cursor+1);
+                input_cursor--;input_len--;
+            }
+        } else if (key==SHELL_KEY_LEFT) {
+            if(input_cursor)input_cursor--;
+        } else if (key==SHELL_KEY_RIGHT) {
+            if(input_cursor<input_len)input_cursor++;
+        } else if (key==SHELL_KEY_ESC || key==SHELL_KEY_DOWN) {
+            input_len=input_cursor=0;input[0]=0;
         } else if (key==SHELL_KEY_UP) {
             strncpy(input,previous,sizeof input-1); input[sizeof input-1]=0;
-            input_len=(unsigned)strlen(input);
-        } else if (key>=32 && key<127 && input_len+1<sizeof input) {
-            input[input_len++]=(char)key;input[input_len]=0;
+            input_len=input_cursor=(unsigned)strlen(input);
+        } else if ((key=='\t' || (key>=32 && key<127)) &&
+                   input_len+1<sizeof input) {
+            memmove(input+input_cursor+1,input+input_cursor,
+                    input_len-input_cursor+1);
+            input[input_cursor++]=(char)key;input_len++;
         }
     }
     edl_profile_release();touch_exword_quit();return -2;

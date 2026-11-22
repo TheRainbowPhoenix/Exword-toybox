@@ -42,3 +42,6 @@ cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude src/posix.c tests/chec
 /tmp/toybox-posix-tests
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude src/io_bridge.c tests/check_io.c -o /tmp/toybox-io-tests
 /tmp/toybox-io-tests
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude \
+  tests/check_compat.c -o /tmp/toybox-compat-tests
+/tmp/toybox-compat-tests

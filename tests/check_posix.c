@@ -34,7 +34,14 @@ static int read_file(const char *path,uint32_t off,void *dst,uint32_t n)
     memcpy(dst,data+off,n);return (int)n;
 }
 static int list(const char *p,unsigned first,struct shell_dirent *d,unsigned n)
-{(void)p;(void)first;(void)d;(void)n;return -1;}
+{
+    if(strcmp(p,"\\\\drv0\\DIR"))return -1;
+    if(n && first<2) {
+        strcpy(d[0].name,first==0?"one.txt":"SUB");
+        d[0].directory=first==1;
+    }
+    return 2;
+}
 static int console(const void *p,unsigned n)
 {
     assert(used+n<sizeof screen);
@@ -85,5 +92,13 @@ int main(void)
     assert(sp_read(0,b,1)==1&&b[0]==27);
     char cwd[32];
     assert(sp_getcwd(cwd,sizeof cwd)==0&&!strcmp(cwd,"\\\\drv0"));
-    puts("PASS: bounded POSIX descriptors, seek, append, console and raw/canonical TTY");
+    struct sp_DIR *dir=sp_opendir("DIR");
+    assert(dir!=NULL);
+    const struct sp_dirent *de=sp_readdir(dir);
+    assert(de && !strcmp(de->name,"one.txt") && !de->directory);
+    de=sp_readdir(dir);
+    assert(de && !strcmp(de->name,"SUB") && de->directory);
+    assert(sp_readdir(dir)==NULL && sp_closedir(dir)==0);
+    assert(sp_rmdir("DIR")<0); /* Refuse non-empty directory. */
+    puts("PASS: bounded POSIX fds, seek, append, TTY and directory iteration");
 }

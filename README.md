@@ -156,3 +156,18 @@ confirmation is required. \`hexdump FILE\` inspects raw file bytes and
 The display font only renders ASCII directly; UTF-8, Shift-JIS, and arbitrary
 binary bytes are not yet decoded. ANSI support is partial, and a genuine
 BusyBox vi port is still future work; vi-lite/nano-lite remain in editors.edl.
+
+### Porting further BusyBox applets
+
+Opt in to \`include/shell_posix_compat.h\` in a small C applet source to map
+common POSIX names such as \`open/read/write/lseek/close/stat/fstat/isatty\`,
+\`opendir/readdir/closedir\`, \`rename/unlink/mkdir/rmdir\` and a subset of
+\`termios\` to the EDL descriptors. The code is **not ABI-compatible with
+glibc/libbb**; upstream BusyBox build files and libbb still need adaptation,
+and \`errno\` is not implemented. This is for portable file-oriented applets,
+not process- or network-related BusyBox programs.
+
+The resident stores only module basenames instead of four redundant 320-byte
+full paths, leaving RAM for the staged I/O and 32-row bounded terminal history.
+Left/Right edit the command line; Up recalls the last line, Down clears the
+entry, and Tab works as a shell argument separator.

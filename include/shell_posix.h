@@ -28,4 +28,13 @@ int sp_tcgetattr(int fd,struct sp_termios *t);
 int sp_tcsetattr(int fd,const struct sp_termios *t);
 int sp_winsize(int fd,struct sp_winsize *w);
 int sp_getcwd(char *out,unsigned cap);
+int sp_unlink(const char *name);
+int sp_rename(const char *from,const char *to);
+int sp_mkdir(const char *name);
+int sp_rmdir(const char *name);
+struct sp_dirent { char name[128]; int directory; };
+struct sp_DIR;
+struct sp_DIR *sp_opendir(const char *name);
+const struct sp_dirent *sp_readdir(struct sp_DIR *dir);
+int sp_closedir(struct sp_DIR *dir);
 #endif

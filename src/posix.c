@@ -17,12 +17,21 @@ struct descriptor {
 };
 static const struct shell_api *env;
 static struct descriptor desc[SP_FILES];
+#define SP_DIRS 2u
+struct sp_DIR {
+    char path[EDL_PATH_MAX];
+    unsigned index,total;
+    struct sp_dirent entry;
+    int used;
+};
+static struct sp_DIR directories[SP_DIRS];
 static unsigned tty_flags=SP_ICANON|SP_ECHO;
 static char line[SP_TTY_LINE], pending[8];
 static unsigned line_len,line_at,pending_len,pending_at;
 void sp_bind(const struct shell_api *api)
 {
     env=api;memset(desc,0,sizeof desc);
+    memset(directories,0,sizeof directories);
     tty_flags=SP_ICANON|SP_ECHO;
     line_len=line_at=pending_len=pending_at=0;
 }
@@ -217,4 +226,68 @@ int sp_getcwd(char *out,unsigned cap)
     unsigned n=(unsigned)strlen(env->cwd);
     if(n>=cap)return -1;
     memcpy(out,env->cwd,n+1);return 0;
+}
+
+/* Minimal directory syscalls for BusyBox-style ls/find implementations. */
+int sp_unlink(const char *name)
+{
+    struct sp_stat st;
+    if(sp_stat(name,&st) || st.mode!=SP_S_IFREG)return -1;
+    char path[EDL_PATH_MAX];
+    return env->resolve_path(name,path) ? -1:env->file_delete(path);
+}
+int sp_rename(const char *from,const char *to)
+{
+    if(!env || !from || !to)return -1;
+    char a[EDL_PATH_MAX],b[EDL_PATH_MAX];
+    if(env->resolve_path(from,a)||env->resolve_path(to,b))return -1;
+    return env->file_rename(a,b);
+}
+int sp_mkdir(const char *name)
+{
+    if(!env || !name)return -1;
+    char path[EDL_PATH_MAX];
+    if(env->resolve_path(name,path))return -1;
+    return env->file_create(path,1);
+}
+int sp_rmdir(const char *name)
+{
+    if(!env || !name)return -1;
+    char path[EDL_PATH_MAX];
+    if(env->resolve_path(name,path) || env->list_dir(path,0,NULL,0)!=0)
+        return -1;
+    return env->file_delete(path);
+}
+struct sp_DIR *sp_opendir(const char *name)
+{
+    if(!env || !name)return NULL;
+    char path[EDL_PATH_MAX];
+    if(env->resolve_path(name,path))return NULL;
+    int n=env->list_dir(path,0,NULL,0);
+    if(n<0)return NULL;
+    for(unsigned i=0;i<SP_DIRS;i++) if(!directories[i].used) {
+        struct sp_DIR *d=&directories[i];
+        memcpy(d->path,path,strlen(path)+1);
+        d->used=1;d->index=0;d->total=(unsigned)n;
+        return d;
+    }
+    return NULL;
+}
+const struct sp_dirent *sp_readdir(struct sp_DIR *d)
+{
+    if(!d || !d->used || d->index>=d->total)return NULL;
+    struct shell_dirent item={0};
+    if(env->list_dir(d->path,d->index,&item,1)<0)return NULL;
+    d->index++;
+    size_t n=strlen(item.name);
+    if(n>=sizeof d->entry.name)n=sizeof d->entry.name-1;
+    memcpy(d->entry.name,item.name,n);
+    d->entry.name[n]=0;
+    d->entry.directory=item.directory;
+    return &d->entry;
+}
+int sp_closedir(struct sp_DIR *d)
+{
+    if(!d || !d->used)return -1;
+    d->used=0;return 0;
 }
