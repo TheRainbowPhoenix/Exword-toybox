@@ -218,8 +218,8 @@ static int read_key(void)
 {
     if(keyboard_visible) { draw_keyboard();dupdate(); }
     for (;;) {
-        key_event_t e=pollevent();
-        if (e.type==KEYEV_NONE) { sleep();continue; }
+        key_event_t e=waitevent(NULL); /* EX-word scans on poll, not sleep */
+        if (e.type==KEYEV_NONE) continue;
         if (e.type==KEYEV_TOUCH_DOWN) {
             int key=keyboard_hit(e.x,e.y);
             if(key) return key;
@@ -430,8 +430,8 @@ static void scan_keys(void)
     println("Raw keys: press EXIT to return.");
     draw_terminal();
     for (;;) {
-        key_event_t ev=pollevent();
-        if(ev.type==KEYEV_NONE){sleep();continue;}
+        key_event_t ev=waitevent(NULL);
+        if(ev.type==KEYEV_NONE)continue;
         if(ev.type!=KEYEV_DOWN)continue;
         if(ev.key==KEY_EXIT)break;
         char msg[32];

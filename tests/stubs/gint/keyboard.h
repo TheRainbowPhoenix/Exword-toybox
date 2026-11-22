@@ -7,6 +7,7 @@
 #define KEYEV_HOLD 3
 typedef struct {int type,key,x,y;int shift,alpha;} key_event_t;
 key_event_t pollevent(void);
+key_event_t waitevent(volatile int *timeout);
 void clearevents(void);
 int keydown(int);
 int keycode_digit(int);
