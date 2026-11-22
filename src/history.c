@@ -7,36 +7,44 @@ static void copy_line(char dst[SHELL_LINE_SIZE], const char *src)
     while(src[n] && n+1<SHELL_LINE_SIZE) {dst[n]=src[n];n++;}
     dst[n]=0;
 }
-static const char *item(const struct shell_history *h, unsigned i)
+static const char *item(const struct shell_history *h,unsigned i)
 {
-    return h->entries[(h->start+i)%SHELL_HISTORY_DEPTH];
+    return h->pool+h->at[i];
 }
 void shell_history_init(struct shell_history *h) {memset(h,0,sizeof *h);}
 unsigned shell_history_count(const struct shell_history *h) {return h->count;}
-const char *shell_history_get(const struct shell_history *h, unsigned index)
+const char *shell_history_get(const struct shell_history *h,unsigned index)
 { return index<h->count ? item(h,index) : NULL; }
-void shell_history_push(struct shell_history *h, const char *line)
+static void drop_oldest(struct shell_history *h)
+{
+    if(h->count<=1) {h->count=h->used=0;return;}
+    unsigned bytes=h->at[1];
+    memmove(h->pool,h->pool+bytes,h->used-bytes);
+    h->used-=bytes;
+    h->count--;
+    for(unsigned i=0;i<h->count;i++)h->at[i]=h->at[i+1]-bytes;
+}
+void shell_history_push(struct shell_history *h,const char *line)
 {
     if(!line || !*line) {h->browsing=0;return;}
     unsigned i=0;
     while(line[i]==' ' || line[i]=='\t')i++;
     if(!line[i]) {h->browsing=0;return;}
     if(h->count && !strcmp(item(h,h->count-1),line)) {
-        h->browsing=0;return; /* No redundant consecutive entries. */
+        h->browsing=0;return;
     }
-    unsigned at;
-    if(h->count<SHELL_HISTORY_DEPTH) {
-        at=(h->start+h->count)%SHELL_HISTORY_DEPTH;
-        h->count++;
-    } else {
-        at=h->start;
-        h->start=(h->start+1)%SHELL_HISTORY_DEPTH;
-    }
-    copy_line(h->entries[at],line);
+    unsigned n=(unsigned)strlen(line)+1;
+    if(n>SHELL_HISTORY_BYTES) {h->browsing=0;return;}
+    while(h->count && (h->count>=SHELL_HISTORY_DEPTH ||
+                       h->used+n>SHELL_HISTORY_BYTES))
+        drop_oldest(h);
+    h->at[h->count]=(uint16_t)h->used;
+    memcpy(h->pool+h->used,line,n);
+    h->count++;h->used+=n;
     h->cursor=h->count;
     h->browsing=0;
 }
-const char *shell_history_up(struct shell_history *h, const char *draft)
+const char *shell_history_up(struct shell_history *h,const char *draft)
 {
     if(!h->count)return NULL;
     if(!h->browsing) {
@@ -51,7 +59,6 @@ const char *shell_history_down(struct shell_history *h)
 {
     if(!h->browsing)return NULL;
     if(h->cursor+1<h->count)return item(h,++h->cursor);
-    h->cursor=h->count;
-    h->browsing=0;
+    h->cursor=h->count;h->browsing=0;
     return h->draft;
 }

@@ -184,7 +184,7 @@ the precise mapping for that device/firmware; unseen keys cannot be mapped.
 
 ## Input, editor and text-command improvements
 
-The resident keeps **the eight most recent commands** in RAM. Use Up to
+The resident keeps **up to eight recent commands** in a compact 512-byte RAM pool (oldest entries are evicted sooner if commands are long). Use Up to
 rewind, Down to advance toward the newest command, and Down once more to
 restore the unfinished input you had before browsing. Run \`history\` to list
 the retained commands. Consecutive duplicate commands are not added twice.
