@@ -26,7 +26,7 @@ Enter, DEL is Backspace, EXIT is Escape, arrows move the cursor/history,
 and the calculator 0 key is Space (SHIFT+0 or EX-word JUMP is Tab). Hardware
 punctuation keys provide / , . : ( ) + - * and more.
 
-**Audio/volume or layout button** toggles a small on-screen *symbol-only*
+**AUDIO or LAYOUT button** toggles a small on-screen *symbol-only*
 keyboard, hidden by default. It is a fallback for punctuation, Space, Tab,
 Escape, Del and Enter; if a particular firmware does not report its volume
 rocker, use the EX-word AUDIO/LAYOUT key instead. The previous path/title bar
@@ -171,3 +171,11 @@ The resident stores only module basenames instead of four redundant 320-byte
 full paths, leaving RAM for the staged I/O and 32-row bounded terminal history.
 Left/Right edit the command line; Up recalls the last line, Down clears the
 entry, and Tab works as a shell argument separator.
+
+### Volume-rocker key identification
+
+gint-exword exposes the EX-word AUDIO and LAYOUT keycodes but does not name a
+separate volume-up/down rocker in \`keycodes.h\`. If the physical volume control
+does not toggle the touch-symbol panel, run \`keyscan\`, press the rocker,
+note the displayed hexadecimal code (if any), then press EXIT. This helps add
+the precise mapping for that device/firmware; unseen keys cannot be mapped.

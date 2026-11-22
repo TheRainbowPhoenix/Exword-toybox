@@ -423,9 +423,26 @@ static int change_dir(const char *s)
     memcpy(cwd,full,strlen(full)+1);
     return 0;
 }
+/* Diagnostic for firmware-specific controls not named by gint's keycodes.
+   In particular, EX-word volume rockers may not have a public enum value. */
+static void scan_keys(void)
+{
+    println("Raw keys: press EXIT to return.");
+    draw_terminal();
+    for (;;) {
+        key_event_t ev=pollevent();
+        if(ev.type==KEYEV_NONE){sleep();continue;}
+        if(ev.type!=KEYEV_DOWN)continue;
+        if(ev.key==KEY_EXIT)break;
+        char msg[32];
+        snprintf(msg,sizeof msg,"physical key: 0x%02x",(unsigned)ev.key);
+        println(msg);
+        draw_terminal();
+    }
+}
 static void show_help(void)
 {
-    println("builtins: cd pwd help clear history modules exit");
+    println("builtins: cd pwd help clear history modules keyscan exit");
     print("applets: ");
     for (unsigned i=0;i<route_count;i++) {
         print(routes[i].name);
@@ -448,6 +465,7 @@ static int run_command(char *line)
     if (ci_equal(argv[0],"clear")) { shell_term_init();return 0; }
     if (ci_equal(argv[0],"history")) { println(previous); return 0; }
     if (ci_equal(argv[0],"help")) { show_help(); return 0; }
+    if (ci_equal(argv[0],"keyscan")) { scan_keys(); return 0; }
     if (ci_equal(argv[0],"modules")) {
         for (unsigned i=0;i<module_count;i++) {
             println(modules[i].name);

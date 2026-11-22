@@ -53,3 +53,10 @@ partial writes, truncate/recreate, rename and delete separately; the current
 truncate implementation deletes and recreates a file and is not atomic.
 Validate editor save/quit on disposable data. Future BusyBox ports need their
 own terminal and filesystem compatibility tests, plus GPL compliance.
+
+## Physical key discovery
+
+If pressing the actual volume rocker does not toggle touch symbols, execute
+\`keyscan\`, press volume up/down once, and record any hexadecimal keycodes.
+Press EXIT to return. A rocker that produces no key event is not currently
+mappable through gint's keyboard API; AUDIO/LAYOUT remain supported toggles.
