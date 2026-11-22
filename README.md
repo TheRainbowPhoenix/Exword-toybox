@@ -23,7 +23,8 @@ return to the same D01 and persistent shell state. No recursive EDL loading.
 **Use the physical EX-word QWERTY keyboard by default.** Hold SHIFT for
 capitals; hold ALPHA+Q..P for 1..0 (ALPHA+A makes a dot). Physical EXE is
 Enter, DEL is Backspace, EXIT is Escape, arrows move the cursor/history,
-and the calculator 0 key is Space (SHIFT+0 or EX-word JUMP is Tab). Hardware
+and EX-word ZOOM (or the 0 key) is Space, JUMP (or SHIFT+0) is Tab. The
+EX-word HISTORY key recalls the previous command. Hardware
 punctuation keys provide / , . : ( ) + - * and more.
 
 **AUDIO or LAYOUT button** toggles a small on-screen *symbol-only*

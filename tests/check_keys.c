@@ -13,6 +13,8 @@ int main(void)
     assert(shell_key_translate(KEY_0,0,0)==' ');
     assert(shell_key_translate(KEY_0,1,0)=='\t');
     assert(shell_key_translate(KEY_EX_JUMP,0,0)=='\t');
+    assert(shell_key_translate(KEY_EX_ZOOM,0,0)==' ');
+    assert(shell_key_translate(KEY_EX_HISTORY,0,0)==SHELL_KEY_UP);
     assert(shell_key_translate(KEY_PAGEUP,0,0)==SHELL_KEY_PAGEUP);
     assert(shell_key_translate(KEY_PAGEDOWN,0,0)==SHELL_KEY_PAGEDOWN);
     assert(shell_key_translate(KEY_EX_AUDIO,0,0)==SHELL_KEY_KBD_TOGGLE);

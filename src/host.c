@@ -526,7 +526,8 @@ int main(void)
     init_api(); discover();
     println("EX-word Toybox shell (experimental)");
     println("Physical QWERTY; AUDIO=touch; PGUP/PGDN=scroll.");
-    println("DEL=backspace  EXIT=ESC  EXE=enter  0=space.");
+    println("DEL=backspace  EXIT=ESC  EXE=enter.");
+    println("ZOOM=space  JUMP=tab  HISTORY=recall.");
     if (!module_count) println("No valid .edl command modules found.");
     for (;;) {
         draw_terminal();

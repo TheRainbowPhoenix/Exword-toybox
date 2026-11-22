@@ -28,6 +28,8 @@ int shell_key_translate(int key, int shift, int alpha)
            Some firmware may not expose a separate volume-rocker event. */
         case KEY_EX_AUDIO: case KEY_EX_LAYOUT: return SHELL_KEY_KBD_TOGGLE;
         case KEY_EX_JUMP: return '\t';
+        case KEY_EX_ZOOM: return ' '; /* Convenient physical space key. */
+        case KEY_EX_HISTORY: return SHELL_KEY_UP;
         /* The calculator-style 0 key is a convenient physical SPACE;
            SHIFT+0 is TAB when there's no dedicated tab key. */
         case KEY_0: return shift ? '\t' : ' ';
