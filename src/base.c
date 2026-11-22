@@ -2,6 +2,7 @@
    Initial commands are clean-room implementations, NOT the upstream BusyBox C
    functions. They intentionally expose only operations the EDL ABI supports. */
 #include "module_util.h"
+#include "shell_posix.h"
 #include "shell_format.h"
 
 __attribute__((used,section(".edl.cmd"),aligned(4)))
@@ -32,17 +33,17 @@ static int app_cat(const struct shell_api *sh)
 {
     if (sh->argc<2) return m_usage(sh,"usage: cat FILE...");
     unsigned char buf[256];
-    for (int i=1;i<sh->argc;i++) {
-        char path[EDL_PATH_MAX];
-        if (m_path(sh,sh->argv[i],path)) return 1;
-        int length=sh->file_size(path);
-        if (length<0) return m_usage(sh,"cat: cannot open file");
-        for (unsigned off=0;off<(unsigned)length;) {
-            unsigned n=(unsigned)length-off;
-            if (n>sizeof buf) n=sizeof buf;
-            if (sh->edl.read(path,off,buf,n)!=(int)n || sh->console_write(buf,n)<0) return 1;
-            off+=n;
+    for(int i=1;i<sh->argc;i++) {
+        int fd=sp_open(sh->argv[i],SP_O_RDONLY);
+        if(fd<0) return m_usage(sh,"cat: cannot open file");
+        int rc;
+        while((rc=sp_read(fd,buf,sizeof buf))>0) {
+            if(sp_write(1,buf,(unsigned)rc)!=rc) {
+                sp_close(fd);return m_usage(sh,"cat: console write error");
+            }
         }
+        sp_close(fd);
+        if(rc<0) return m_usage(sh,"cat: filesystem read error");
     }
     return 0;
 }
@@ -170,6 +171,7 @@ int edl_main(const struct edl_api *edl)
 {
     const struct shell_api *sh=shell_from_edl(edl);
     if (!sh || !sh->command || sh->argc<=0) return -1;
+    sp_bind(sh);
     if (m_equal(sh->command,"ls")) return app_ls(sh);
     if (m_equal(sh->command,"cat")) return app_cat(sh);
     if (m_equal(sh->command,"echo")) return app_echo(sh);

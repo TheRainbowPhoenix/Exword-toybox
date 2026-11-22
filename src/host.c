@@ -3,6 +3,10 @@
 #include "host_fs.h"
 #include "shell_names.h"
 #include "shell_parse.h"
+#include "shell_keys.h"
+#include "shell_io.h"
+#include "shell_terminal.h"
+#include <gint/keycodes.h>
 #include <gint/display.h>
 #include <gint/keyboard.h>
 #include <gint/cpu.h>
@@ -13,8 +17,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define TERM_COLS 64
-#define TERM_ROWS 14
 #define MAX_ROUTES 48u /* shared command pool, not 24 names per module */
 #define WHITE 0xffff
 #define DARK  0x0841
@@ -22,9 +24,9 @@
 #define MUTED 0x8410
 static char content[EDL_PATH_MAX], cwd[EDL_PATH_MAX], image_path[EDL_PATH_MAX];
 static char input[SHELL_LINE_SIZE], previous[SHELL_LINE_SIZE];
-static unsigned input_len, shift_mode, symbol_mode;
-static char scroll[TERM_ROWS][TERM_COLS+1];
-static unsigned scroll_row, scroll_col;
+static unsigned input_len;
+static int keyboard_visible, in_applet; /* default: physical keyboard */
+
 struct module { char path[EDL_PATH_MAX]; };
 /* Allocate names once in a shared registry, not in per-module fixed arrays. */
 struct route { char name[SHELL_NAME_SIZE]; uint8_t mod; };
@@ -131,134 +133,112 @@ static int resolve(const char *given, char out[EDL_PATH_MAX])
     memcpy(out,work,n+1);
     return 0;
 }
-static void new_line(void)
-{
-    if (scroll_row+1<TERM_ROWS) scroll_row++;
-    else { memmove(scroll,scroll+1,(TERM_ROWS-1)*(TERM_COLS+1)); scroll_row=TERM_ROWS-1; }
-    memset(scroll[scroll_row],0,TERM_COLS+1);
-    scroll_col=0;
-}
-static void append_char(char c)
-{
-    if (c=='\r') { scroll_col=0; return; }
-    if (c=='\n') { new_line(); return; }
-    if (c=='\t') { do { append_char(' '); } while (scroll_col%4); return; }
-    if ((unsigned char)c<32 || (unsigned char)c>126) c='.';
-    if (scroll_col==TERM_COLS) new_line();
-    scroll[scroll_row][scroll_col++]=c;
-    scroll[scroll_row][scroll_col]=0;
-}
+static void new_line(void) { shell_term_put('\n'); }
+static void append_char(char c) { shell_term_put((unsigned char)c); }
 static void print(const char *s) { while (*s) append_char(*s++); }
 static void println(const char *s) { print(s); new_line(); }
+static unsigned terminal_height(void) { return keyboard_visible ? 14u : 24u; }
+/* Most printable keys are now physical. Touch supplies missing symbols only. */
 static void draw_keyboard(void)
 {
-    static const char *letters[3]={"qwertyuiop","asdfghjkl","zxcvbnm"};
-    static const char *symbols[3]={"1234567890","-_/\\:;.,?@","!#$%&*()+="};
+    static const char *rows[2]={"1234567890",".,/-\\:;?=+"};
     drect(0,205,527,319,0x2104);
-    for (unsigned row=0;row<3;row++) {
-        const char *keys=symbol_mode?symbols[row]:letters[row];
-        size_t count=strlen(keys);
-        int width=48, gap=4;
-        int x0=(528-(int)count*(width+gap)+gap)/2;
-        int y=210+(int)row*26;
-        for (size_t i=0;i<count;i++) {
-            int x=x0+(int)i*(width+gap);
-            drect(x,y,x+width-1,y+23,0xbdf7);
-            char label[2]={keys[i],0};
-            if (!symbol_mode && shift_mode && label[0]>='a' && label[0]<='z') label[0]-=32;
-            dtext(x+19,y+7,DARK,label);
+    for (int row=0;row<2;row++) {
+        int x0=(528-10*52+4)/2;
+        for (int i=0;i<10;i++) {
+            int x=x0+i*52,y=210+row*26;
+            drect(x,y,x+47,y+23,0xbdf7);
+            char label[2]={rows[row][i],0};
+            dtext(x+18,y+7,DARK,label);
         }
     }
-    static const char *label[]={"SHIFT","123","SPACE","ESC","DEL","ENTER"};
-    static const int widths[]={77,68,130,66,70,82};
-    int x=8;
-    for (int i=0;i<6;i++) {
-        uint16_t fill = (i==0 && shift_mode) || (i==1 && symbol_mode) ? 0x9dff : 0xe71c;
-        drect(x,289,x+widths[i]-1,316,fill);
-        dtext(x+5,298,DARK,i==1 && symbol_mode?"ABC":label[i]);
-        x+=widths[i]+3;
+    static const char *buttons[]={"SPACE","TAB","ESC","DEL","ENTER"};
+    static const int widths[]={115,80,78,90,112};
+    int x=15;
+    for(int i=0;i<5;i++) {
+        drect(x,289,x+widths[i]-1,316,0xe71c);
+        dtext(x+8,298,DARK,buttons[i]);
+        x+=widths[i]+6;
     }
 }
 static void draw_terminal(void)
 {
     dclear(DARK);
-    drect(0,0,527,16,BLUE);
-    char status[70];
-    snprintf(status,sizeof status,"TOYBOX  %s",cwd[0]?cwd:"(starting)");
-    status[64]=0;
-    dtext(6,3,WHITE,status);
-    for (unsigned i=0;i<TERM_ROWS;i++)
-        if (scroll[i][0]) dtext(8,20+(int)i*12,WHITE,scroll[i]);
-    drect(0,190,527,204,0x3186);
-    char prompt[TERM_COLS+1]="EX> ";
+    unsigned height=terminal_height();
+    for (unsigned i=0;i<height;i++) {
+        const char *line=shell_term_line(i,height);
+        if (*line) dtext(8,4+(int)i*12,WHITE,line);
+    }
+    int prompt_y=keyboard_visible?185:301;
+    drect(0,prompt_y-4,527,prompt_y+15,0x3186);
+    char prompt[SHELL_TERM_COLS+1]="EX> ";
     unsigned visible=input_len>58?58:input_len;
-    const char *tail=input+input_len-visible;
-    memcpy(prompt+4,tail,visible); prompt[4+visible]=0;
-    dtext(8,193,WHITE,prompt);
-    draw_keyboard();
+    memcpy(prompt+4,input+input_len-visible,visible);
+    prompt[4+visible]=0;
+    dtext(8,prompt_y,WHITE,prompt);
+    if (shell_term_back()) dtext(430,prompt_y,WHITE,"PGDN");
+    if (keyboard_visible) draw_keyboard();
     dupdate();
 }
 static int console_write(const void *bytes,unsigned length)
 {
     if (!bytes && length) return -1;
-    const char *p=bytes;
-    for (unsigned i=0;i<length;i++) append_char(p[i]);
+    shell_term_feed(bytes,length);
     draw_terminal();
     return (int)length;
 }
 static int keyboard_hit(int x,int y)
 {
-    if (y>=210 && y<284) {
+    if (!keyboard_visible) return 0;
+    if (y>=210 && y<262) {
+        static const char *rows[2]={"1234567890",".,/-\\:;?=+"};
         int row=(y-210)/26;
-        if (row>=3 || (y-210)%26>=24) return 0;
-        const char *keys=symbol_mode?
-            (const char*[]){"1234567890","-_/\\:;.,?@","!#$%&*()+="}[row]:
-            (const char*[]){"qwertyuiop","asdfghjkl","zxcvbnm"}[row];
-        int count=(int)strlen(keys), x0=(528-count*52+4)/2;
-        int index=(x-x0)/52;
-        if (x<x0 || index<0 || index>=count || (x-x0)%52>=48) return 0;
-        char c=keys[index];
-        return shift_mode && !symbol_mode && c>='a' && c<='z' ? c-32 : c;
+        if (row>=2 || (y-210)%26>=24) return 0;
+        int x0=(528-10*52+4)/2,idx=(x-x0)/52;
+        if (x<x0 || idx<0 || idx>=10 || (x-x0)%52>=48) return 0;
+        return rows[row][idx];
     }
-    if (y>=289 && y<=316) {
-        static const int widths[]={77,68,130,66,70,82};
-        int left=8;
-        for (int i=0;i<6;i++) {
-            if (x>=left && x<left+widths[i]) {
-                if (i==0) { shift_mode=!shift_mode; return -1; }
-                if (i==1) { symbol_mode=!symbol_mode; return -1; }
-                if (i==2) return ' ';
-                if (i==3) return SHELL_KEY_ESC;
-                if (i==4) return SHELL_KEY_BACK;
-                return SHELL_KEY_ENTER;
-            }
-            left+=widths[i]+3;
+    if(y>=289 && y<=316) {
+        static const int widths[]={115,80,78,90,112};
+        static const int keys[]={' ','\t',SHELL_KEY_ESC,
+                                  SHELL_KEY_BACK,SHELL_KEY_ENTER};
+        int x0=15;
+        for (int i=0;i<5;i++) {
+            if(x>=x0 && x<x0+widths[i]) return keys[i];
+            x0+=widths[i]+6;
         }
     }
     return 0;
 }
 static int read_key(void)
 {
-    draw_keyboard(); dupdate();
+    if(keyboard_visible) { draw_keyboard();dupdate(); }
     for (;;) {
         key_event_t e=pollevent();
-        if (e.type==KEYEV_NONE) { sleep(); continue; }
+        if (e.type==KEYEV_NONE) { sleep();continue; }
         if (e.type==KEYEV_TOUCH_DOWN) {
             int key=keyboard_hit(e.x,e.y);
-            if (key==-1) { draw_keyboard(); dupdate(); continue; }
-            if (key) return key;
+            if(key) return key;
             continue;
         }
         if (e.type!=KEYEV_DOWN && e.type!=KEYEV_HOLD) continue;
-        if (e.key==KEY_EXE) return SHELL_KEY_ENTER;
-        if (e.key==KEY_EXIT) return SHELL_KEY_BACK;
-        if (e.key==KEY_ACON || e.key==KEY_MENU) return SHELL_KEY_ESC;
-        if (e.key==KEY_UP) return SHELL_KEY_UP;
-        if (e.key==KEY_DOWN) return SHELL_KEY_DOWN;
-        if (e.key==KEY_LEFT) return SHELL_KEY_LEFT;
-        if (e.key==KEY_RIGHT) return SHELL_KEY_RIGHT;
-        int digit=keycode_digit(e.key);
-        if (digit>=0 && digit<=9) return '0'+digit;
+        /* Do not auto-repeat the keyboard visibility toggle. */
+        int key=shell_key_translate(e.key,
+                 keydown(KEY_SHIFT) || e.shift,
+                 keydown(KEY_ALPHA) || e.alpha);
+        if(key==SHELL_KEY_KBD_TOGGLE) {
+            if(e.type==KEYEV_DOWN) {
+                keyboard_visible=!keyboard_visible;
+                draw_terminal();
+            }
+            continue;
+        }
+        if((key==SHELL_KEY_PAGEUP || key==SHELL_KEY_PAGEDOWN) && !in_applet) {
+            shell_term_page(key==SHELL_KEY_PAGEUP?1:-1,terminal_height());
+            draw_terminal();
+            continue;
+        }
+        if(key) return key;
     }
 }
 /* Optional legacy callbacks, for modules using the Edelweiss ABI prefix. */
@@ -300,10 +280,16 @@ static int protected_module_path(const char *path)
     size_t k=strlen(leaf);
     return k>=4 && (ci_equal(leaf+k-4,".edl") || ci_equal(leaf+k-4,".d01"));
 }
-static int safe_write(const char *path,unsigned offset,const void *bytes,unsigned size,unsigned flags)
+static int safe_read(const char *path,uint32_t offset,void *dst,uint32_t length)
 {
-    return !shell_path_valid(path,0) || protected_module_path(path) ?
-           -1 : host_fs_write(path,offset,bytes,size,flags);
+    return shell_io_read(edl_read,path,offset,dst,length);
+}
+static int safe_write(const char *path,unsigned offset,const void *bytes,
+                      unsigned size,unsigned flags)
+{
+    if (!shell_path_valid(path,0) || protected_module_path(path))
+        return -1;
+    return shell_io_write(host_fs_write,path,offset,bytes,size,flags);
 }
 static int safe_delete(const char *path)
 {
@@ -322,6 +308,13 @@ static int safe_create(const char *path,int directory)
     return !shell_path_valid(path,directory) || protected_module_path(path) ?
            -1 : host_fs_create(path,directory);
 }
+static int tty_size(unsigned *cols,unsigned *rows)
+{
+    if(!cols || !rows) return -1;
+    *cols=SHELL_TERM_COLS;
+    *rows=terminal_height();
+    return 0;
+}
 static void init_api(void)
 {
     api=(struct shell_api){
@@ -330,13 +323,14 @@ static void init_api(void)
               .syscall_dispatcher=*(volatile uint32_t *)0x74000000,
               .image_path=image_path,.rect=api_rect,.text=api_text,
               .present=api_present,.wait=api_wait,.scan=edl_scan,
-              .metadata=edl_metadata,.read=edl_read,.os_call=edl_os_call,
+              .metadata=edl_metadata,.read=safe_read,.os_call=edl_os_call,
               .launch=request_launch,.status=status},
         .shell_magic=SHELL_SERVICE_MAGIC,.shell_version=SHELL_SERVICE_VERSION,
         .cwd=cwd,.console_write=console_write,.read_key=read_key,
         .resolve_path=resolve,.file_size=host_fs_size,.list_dir=host_fs_list,
         .file_write=safe_write,.file_delete=safe_delete,
-        .file_rename=safe_rename,.file_create=safe_create
+        .file_rename=safe_rename,.file_create=safe_create,
+        .tty_size=tty_size
     };
 }
 static int read_manifest_bytes(void *ctx,uint32_t at,void *dst,size_t n)
@@ -447,7 +441,7 @@ static int run_command(char *line)
         return 0;
     }
     if (ci_equal(argv[0],"pwd")) { println(cwd); return 0; }
-    if (ci_equal(argv[0],"clear")) { memset(scroll,0,sizeof scroll);scroll_row=scroll_col=0;return 0; }
+    if (ci_equal(argv[0],"clear")) { shell_term_init();return 0; }
     if (ci_equal(argv[0],"history")) { println(previous); return 0; }
     if (ci_equal(argv[0],"help")) { show_help(); return 0; }
     if (ci_equal(argv[0],"modules")) {
@@ -476,7 +470,9 @@ static int run_command(char *line)
             edl_sync_code();
             *(volatile uint32_t *)(uintptr_t)api.edl.stack_start=0x45444c53;
             clearevents();
+            in_applet=1;
             rc=edl_invoke(image.entry,&api.edl,api.edl.stack_end);
+            in_applet=0;
             edl_gint_cleanup();
             if (*(volatile uint32_t *)(uintptr_t)api.edl.stack_start!=0x45444c53) {
                 println("FATAL: payload stack canary destroyed");
@@ -492,6 +488,7 @@ static int run_command(char *line)
 }
 int main(void)
 {
+    shell_term_init();
     dclear(DARK); dtext(20,22,WHITE,"Toybox: initializing Edelweiss..."); dupdate();
     int rc=edl_profile_init();
     if (rc) {

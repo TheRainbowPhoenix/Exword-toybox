@@ -103,6 +103,13 @@ int main(void)
     const char *cat[]={"cat","notes.txt"};
     assert(run(base_edl_main,"cat",2,cat)==0);
     assert(!strcmp(output,"hello world\nsecond line\n"));
+    const char *dump[]={"hexdump","notes.txt"};
+    assert(run(text_edl_main,"hexdump",2,dump)==0);
+    assert(strstr(output,"68 65 6c 6c 6f")!=NULL);
+    const char *more[]={"more","notes.txt"};
+    assert(run(text_edl_main,"more",2,more)==0);
+    assert(strstr(output,"hello world")!=NULL);
+
     const char *cp[]={"cp","notes.txt","copy.txt"};
     assert(run(base_edl_main,"cp",3,cp)==0 && created && copied_n==original_n);
     assert(!memcmp(copied,original,original_n));

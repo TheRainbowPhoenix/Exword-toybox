@@ -46,7 +46,8 @@ file(WRITE "${EDL_LINKER}" "${edl_script}")
 # firmware gating, cache coordination and native service sources are reused.
 set(EDL_HOST_DIR "${edelweiss_SOURCE_DIR}/exword")
 add_executable(toybox
-  src/host.c src/host_fs.c src/names.c src/manifest.c src/parser.c
+  src/host.c src/host_fs.c src/io_bridge.c src/keymap.c src/terminal.c
+  src/names.c src/manifest.c src/parser.c
   "${EDL_HOST_DIR}/fs.c" "${EDL_HOST_DIR}/paths.c"
   "${EDL_HOST_DIR}/profile.c" "${EDL_HOST_DIR}/firmware.c"
   "${EDL_HOST_DIR}/scratch.c" "${EDL_HOST_DIR}/read_cache.c"
@@ -68,7 +69,9 @@ foreach(bundle IN ITEMS base editors text)
   add_edl(${bundle} "src/${bundle}.c")
   target_include_directories(${bundle} PRIVATE include src)
 endforeach()
-target_sources(text PRIVATE src/busybox_text.c)
+target_sources(text PRIVATE src/busybox_text.c src/posix_tools.c)
+target_sources(base PRIVATE src/posix.c)
+target_sources(text PRIVATE src/posix.c)
 
 if(SHELL_BUILD_PACKAGES)
   if(NOT EXWORD_METADATA_SOURCE)

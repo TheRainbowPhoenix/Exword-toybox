@@ -1,9 +1,10 @@
 #include "module_util.h"
+#include "shell_posix.h"
 #include "shell_format.h"
 __attribute__((used,section(".edl.cmd"),aligned(4)))
 const struct shell_manifest shell_commands={
-    .magic=SHELL_MANIFEST_MAGIC,.version=SHELL_MANIFEST_VERSION,.count=8,
-    .names={"wc","head","grep","basename","dirname","uniq","sort","tail"}
+    .magic=SHELL_MANIFEST_MAGIC,.version=SHELL_MANIFEST_VERSION,.count=10,
+    .names={"wc","head","grep","basename","dirname","uniq","sort","tail","more","hexdump"}
 };
 static int wc(const struct shell_api *sh)
 {
@@ -89,12 +90,16 @@ static int grep(const struct shell_api *sh)
     return found?0:1;
 }
 int bb_text_main(const struct shell_api *sh);
+int posix_tool_main(const struct shell_api *sh);
 int edl_main(const struct edl_api *edl)
 {
     const struct shell_api *sh=shell_from_edl(edl);
     if (!sh) return -1;
+    sp_bind(sh);
     if (m_equal(sh->command,"wc")) return wc(sh);
     if (m_equal(sh->command,"head")) return head(sh);
     if (m_equal(sh->command,"grep")) return grep(sh);
+    if (m_equal(sh->command,"more") || m_equal(sh->command,"hexdump"))
+        return posix_tool_main(sh);
     return bb_text_main(sh);
 }

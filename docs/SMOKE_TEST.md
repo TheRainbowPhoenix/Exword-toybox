@@ -25,12 +25,16 @@ cannot recover. Back up all device/SD data before installing or starting.
 
 Record the exact model and ROM version, then verify these in order:
 
-- [ ] Boot shows a Toybox terminal and accepts touch keyboard input.
+- [ ] Boot shows a Toybox terminal; physical QWERTY/SHIFT/ALPHA works without touch input.
+- [ ] EX-word audio/layout toggle opens and hides the symbol-only touch keyboard.
+- [ ] Page Up / Page Down scroll the resident terminal, and the path/title bar is absent.
 - [ ] `help` lists builtins and commands from the three EDL bundles.
 - [ ] `pwd` shows the active package directory.
 - [ ] `modules` lists `base.edl`, `editors.edl`, and `text.edl`.
 - [ ] `ls` enumerates the package directory correctly.
-- [ ] `cat` on the pre-existing nonessential text file prints the expected data.
+- [ ] `cat` on the pre-existing nonessential **ASCII** text file prints the exact expected bytes as visible letters, without corruption.
+- [ ] `hexdump` on that same file shows the expected ASCII hex bytes; compare with EXWord-Explorer's hex viewer if corruption persists.
+- [ ] `more` pauses on long text and accepts SPACE, ENTER and Q.
 - [ ] A command from `text.edl`, such as `head <filename>`, returns to the
       same prompt with `pwd` unchanged.
 - [ ] `exit` returns to the OS cleanly; launching again still works.

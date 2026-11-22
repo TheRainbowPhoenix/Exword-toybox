@@ -1,16 +1,10 @@
 #ifndef TOYBOX_SHELL_API_H
 #define TOYBOX_SHELL_API_H
 #include "shell_format.h"
+#include "shell_keys.h"
 #include <edl.h>
 #define SHELL_SERVICE_MAGIC 0x53484c31u /* SHL1 */
 #define SHELL_SERVICE_VERSION 1u
-#define SHELL_KEY_ENTER  0x100
-#define SHELL_KEY_BACK   0x101
-#define SHELL_KEY_LEFT   0x102
-#define SHELL_KEY_RIGHT  0x103
-#define SHELL_KEY_UP     0x104
-#define SHELL_KEY_DOWN   0x105
-#define SHELL_KEY_ESC    0x106
 #define SHELL_WRITE_CREATE 1u
 #define SHELL_WRITE_TRUNC  2u
 struct shell_dirent { char name[128]; int directory; };
@@ -34,6 +28,7 @@ struct shell_api {
     int (*file_delete)(const char *absolute);
     int (*file_rename)(const char *old_absolute, const char *new_absolute);
     int (*file_create)(const char *absolute, int directory);
+    int (*tty_size)(unsigned *cols, unsigned *rows);
 };
 static inline const struct shell_api *shell_from_edl(const struct edl_api *api)
 {

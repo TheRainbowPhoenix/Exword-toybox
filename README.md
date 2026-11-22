@@ -9,7 +9,7 @@ TOYBX/_CONTENT/
     toybox.d01      native resident kernel + text terminal + command lookup
     base.edl        ls cat echo cp mv rm touch mkdir rmdir date true
     editors.edl     editable vi-lite and nano-lite modes (32 KiB max file)
-    text.edl        wc head grep basename dirname uniq sort tail
+    text.edl        wc head grep basename dirname uniq sort tail more hexdump
 ```
 
 A module declares an applet manifest as a **non-loaded** `.edl.cmd` ELF section,
@@ -20,10 +20,20 @@ return to the same D01 and persistent shell state. No recursive EDL loading.
 
 ## Controls
 
-Use the touch keyboard under the 528×320 terminal: the first 3 rows enter text,
-SHIFT toggles capitals, 123 toggles symbols, SPACE/ESC/DEL/ENTER are along the
-bottom. Physical EXE enters, EXIT backspaces, AC/ON or MENU cancels input;
-arrow-up recalls the previous command.
+**Use the physical EX-word QWERTY keyboard by default.** Hold SHIFT for
+capitals; hold ALPHA+Q..P for 1..0 (ALPHA+A makes a dot). Physical EXE is
+Enter, DEL is Backspace, EXIT is Escape, arrows move the cursor/history,
+and the calculator 0 key is Space (SHIFT+0 or EX-word JUMP is Tab). Hardware
+punctuation keys provide / , . : ( ) + - * and more.
+
+**Audio/volume or layout button** toggles a small on-screen *symbol-only*
+keyboard, hidden by default. It is a fallback for punctuation, Space, Tab,
+Escape, Del and Enter; if a particular firmware does not report its volume
+rocker, use the EX-word AUDIO/LAYOUT key instead. The previous path/title bar
+is gone. **Page Up / Page Down** scroll terminal history at the prompt; output
+scrollback is bounded and cannot retain an entire large file. Use `more FILE`
+for long files. Physical ESC/EXIT remains vi's normal-mode/quit key; only
+DEL backspaces.
 
 Examples:
 
@@ -119,3 +129,30 @@ the separate lightweight editors, not upstream BusyBox vi or GNU nano.
 more POSIX compatibility, terminal handling and substantial additional applet
 porting; commands involving processes, fork/exec, network facilities,
 permissions, pipes, or signals are not currently supported.
+
+## Experimental POSIX/TTY compatibility layer
+
+The resident shell now understands a bounded subset of ANSI/ECMA-48 terminal
+sequences (cursor motion, carriage return, clear screen/line, and SGR ignored
+cleanly). The touch keyboard is optional; terminal rows expand when hidden.
+
+EDL applets can use \`include/shell_posix.h\` + \`src/posix.c\` for **0/1/2 TTY
+descriptors** and four additional file descriptors: \`sp_open\`, \`sp_read\`,
+\`sp_write\`, \`sp_close\`, \`sp_lseek\`, \`sp_stat\`, \`sp_fstat\`, \`sp_getcwd\`,
+\`sp_tcgetattr\`, \`sp_tcsetattr\`, \`sp_winsize\` and \`sp_isatty\`.
+Termios-like \`SP_ICANON\` and \`SP_ECHO\` modes support basic canonical line
+input and raw bytes, with arrow keys returned as ANSI sequences. This is a
+source-level POSIX *portability layer*, not a complete POSIX libc. BusyBox
+sources still need targeted adaptation, especially for stdio, dynamic
+allocation, signals, pipes, fork, exec, and terminal details.
+
+The \`cat\` applet now reads using the descriptor API, while both file reads
+and writes cross the EX-word OS-world boundary through **resident staging
+buffers** rather than passing EDL arena buffers to native syscalls. This
+addresses one plausible cause of corrupted plain-ASCII reads. Device-side
+confirmation is required. \`hexdump FILE\` inspects raw file bytes and
+\`more FILE\` pauses between pages so the original text can be compared.
+
+The display font only renders ASCII directly; UTF-8, Shift-JIS, and arbitrary
+binary bytes are not yet decoded. ANSI support is partial, and a genuine
+BusyBox vi port is still future work; vi-lite/nano-lite remain in editors.edl.
