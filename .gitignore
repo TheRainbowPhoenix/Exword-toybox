@@ -1,2 +1,9 @@
 /build*/
-/dependencies/
+/.cache/
+__pycache__/
+*.pyc
+*.o
+*.a
+*.d01
+*.edl
+*.map
