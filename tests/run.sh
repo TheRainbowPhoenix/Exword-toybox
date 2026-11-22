@@ -29,3 +29,6 @@ python3 tools/check_sources.py
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
   tests/check_busybox.c src/busybox_text.c -o /tmp/toybox-busybox-tests
 /tmp/toybox-busybox-tests
+cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
+  tests/check_fs.c src/host_fs.c src/names.c -o /tmp/toybox-nativefs-tests
+/tmp/toybox-nativefs-tests
