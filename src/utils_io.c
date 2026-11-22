@@ -104,3 +104,31 @@ int u_glob(const char *p,const char *s)
     }
     return !*s;
 }
+
+int u_strcmp(const char *a,const char *b)
+{
+    while(*a && *a==*b) {a++;b++;}
+    return (unsigned char)*a-(unsigned char)*b;
+}
+int u_strncmp(const char *a,const char *b,unsigned n)
+{
+    while(n && *a && *a==*b) {a++;b++;n--;}
+    return n?(unsigned char)*a-(unsigned char)*b:0;
+}
+const char *u_strchr(const char *s,int c)
+{
+    unsigned char ch=(unsigned char)c;
+    for(;;s++) {
+        if((unsigned char)*s==ch)return s;
+        if(!*s)return NULL;
+    }
+}
+const char *u_strrchr(const char *s,int c)
+{
+    const char *found=NULL;
+    unsigned char ch=(unsigned char)c;
+    for(;;s++) {
+        if((unsigned char)*s==ch)found=s;
+        if(!*s)return found;
+    }
+}

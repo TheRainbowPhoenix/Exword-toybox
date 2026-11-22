@@ -21,4 +21,15 @@ int u_int(const char *s,int32_t *n);
 int u_signed(const struct shell_api *sh,int32_t n);
 int u_join(char out[EDL_PATH_MAX],const char *dir,const char *name);
 int u_glob(const char *pattern,const char *name);
+/* Edelweiss's freestanding EDL runtime does not export libc's str* routines.
+   Redirect these only inside the optional utility pack; no host ABI impact. */
+int u_strcmp(const char *a,const char *b);
+int u_strncmp(const char *a,const char *b,unsigned n);
+const char *u_strchr(const char *s,int c);
+const char *u_strrchr(const char *s,int c);
+#define strcmp  u_strcmp
+#define strncmp u_strncmp
+#define strchr  u_strchr
+#define strrchr u_strrchr
+
 #endif
