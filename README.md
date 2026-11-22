@@ -86,8 +86,9 @@ See the [read-only device smoke-test checklist](docs/SMOKE_TEST.md) before
 trying filesystem modifications. Destructive writes, including editor saves,
 are not yet validated on physical hardware.
 
-The bounded resident command registry supports **four EDL bundles and 48 total
-applet names**. The next milestone is read-only device verification (boot,
+The bounded resident command registry supports **five EDL bundles and 48 total
+applet names**. The fifth slot can host the optional `qjs.edl` JavaScript
+interpreter alongside the four standard bundles (`js FILE.JS [args...]`). The next milestone is read-only device verification (boot,
 keyboard, `help`, `pwd`, `modules`, `ls`, `cat`, module return), followed
 by controlled tests of disposable files and further BusyBox applet ports.
 
