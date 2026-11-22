@@ -279,6 +279,31 @@ static int api_wait(struct edl_event *e)
            k==SHELL_KEY_LEFT?EDL_LEFT:k==SHELL_KEY_RIGHT?EDL_RIGHT:0;
     return 0;
 }
+/* Allow GUI EDLs to animate without waiting indefinitely for a key.
+   Uses the host's native keyboard service, never a payload-side syscall. */
+static int api_wait_timeout(struct edl_event *e,unsigned ms)
+{
+    if(!e) return -1;
+    if(!ms) return api_wait(e);
+    if(ms>60000) ms=60000;
+    uint32_t start=rtc_ticks(),target=(ms*128u+999u)/1000u;
+    *e=(struct edl_event){0};
+    for(;;) {
+        key_event_t event=pollevent();
+        if(event.type==KEYEV_DOWN) {
+            int k=shell_key_translate(event.key,
+                keydown(KEY_SHIFT)||event.shift,
+                keydown(KEY_ALPHA)||event.alpha);
+            e->key=k==SHELL_KEY_ENTER?EDL_OK:k==SHELL_KEY_ESC?EDL_BACK:
+                k==SHELL_KEY_UP?EDL_UP:k==SHELL_KEY_DOWN?EDL_DOWN:
+                k==SHELL_KEY_LEFT?EDL_LEFT:k==SHELL_KEY_RIGHT?EDL_RIGHT:0;
+            if(e->key)return 0;
+        }
+        uint32_t now=rtc_ticks();
+        uint32_t elapsed=now>=start?now-start:128u*86400u-start+now;
+        if(elapsed>=target)return 0;
+    }
+}
 static int request_launch(const char *path) { (void)path; return -1; }
 static int status(struct edl_status *out)
 {
@@ -343,7 +368,7 @@ static void init_api(void)
               .size=sizeof(struct shell_api),.width=DWIDTH,.height=DHEIGHT,
               .syscall_dispatcher=*(volatile uint32_t *)0x74000000,
               .image_path=image_path,.rect=api_rect,.text=api_text,
-              .present=api_present,.wait=api_wait,.scan=edl_scan,
+              .present=api_present,.wait=api_wait,.wait_timeout=api_wait_timeout,.scan=edl_scan,
               .metadata=edl_metadata,.read=safe_read,.os_call=edl_os_call,
               .launch=request_launch,.status=status},
         .shell_magic=SHELL_SERVICE_MAGIC,.shell_version=SHELL_SERVICE_VERSION,
