@@ -387,10 +387,6 @@ static void init_api(void)
         .tty_size=tty_size
     };
 }
-static int read_manifest_bytes(void *ctx,uint32_t at,void *dst,size_t n)
-{
-    return edl_read((const char*)ctx,at,dst,(uint32_t)n)==(int)n?0:-1;
-}
 /* Fast path: locate only this add-in's directory. The old edl_scan()
    repeated a full recursive scan of every installed app once per four
    records, making Toybox startup O(number_of_addins^2). */
@@ -430,10 +426,8 @@ static int add_module(const char *filename)
     if (!is_edl(filename) || strlen(filename)>12 || module_count>=SHELL_MAX_MODULES) return -1;
     char path[EDL_PATH_MAX];
     if (combine(path,content,filename)) return -1;
-    int size=host_fs_size(path);
-    if (size<0) return -1;
     struct shell_manifest manifest;
-    if (shell_manifest_read(read_manifest_bytes,path,(uint32_t)size,&manifest)) return -1;
+    if (host_fs_read_manifest(path,&manifest)) return -1;
     unsigned needed=0;
     for (unsigned i=0;i<manifest.count;i++) {
         for (unsigned j=0;j<route_count;j++)
