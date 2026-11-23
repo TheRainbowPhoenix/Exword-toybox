@@ -188,15 +188,29 @@ static void draw_terminal(void)
     }
     int prompt_y=keyboard_visible?185:301;
     drect(0,prompt_y-4,527,prompt_y+15,0x3186);
-    char prompt[SHELL_TERM_COLS+1]="EX> ";
-    unsigned start=input_cursor>58?input_cursor-58:0;
+    char prompt[SHELL_LINE_SIZE+5]="EX> ";
+    unsigned start=0;
+    int prefix_width=0;
+    /* Keep the cursor visible with actual proportional-font widths.
+       A fixed 8 px/character estimate breaks with '.', 'i', etc. */
+    for(;;) {
+        unsigned prefix=input_cursor-start;
+        memcpy(prompt+4,input+start,prefix);
+        prompt[4+prefix]=0;
+        dnsize(prompt,(int)(4+prefix),NULL,&prefix_width,NULL);
+        if(prefix_width<=DWIDTH-24 || start>=input_cursor)break;
+        start++;
+    }
     unsigned visible=input_len-start;
-    if(visible>58)visible=58;
     memcpy(prompt+4,input+start,visible);
     prompt[4+visible]=0;
+    int rendered_width=0;
+    const char *tail=drsize(prompt,NULL,DWIDTH-24,&rendered_width);
+    if(tail)prompt[tail-prompt]=0;
     dtext(8,prompt_y,WHITE,prompt);
-    unsigned cursor_x=8+(4+input_cursor-start)*8;
-    drect((int)cursor_x,prompt_y+12,(int)cursor_x+6,prompt_y+13,WHITE);
+    int cursor_x=8+prefix_width;
+    if(cursor_x>DWIDTH-8)cursor_x=DWIDTH-8;
+    drect(cursor_x,prompt_y+12,cursor_x+6,prompt_y+13,WHITE);
     if (shell_term_back()) dtext(430,prompt_y,WHITE,"PGDN");
     if (keyboard_visible) draw_keyboard();
     dupdate();
@@ -551,6 +565,10 @@ static int run_command(char *line)
     for (unsigned i=0;i<route_count;i++) {
         if (!ci_equal(argv[0],route_names+routes[i].name_at)) continue;
         if (combine(image_path,content,modules[routes[i].mod].name)) return -1;
+        print("loading ");
+        print(modules[routes[i].mod].name);
+        println("...");
+        draw_terminal(); /* Show progress before slow cache flush and ELF I/O. */
         api.command=argv[0]; api.argc=argc; api.argv=argv;
         api.edl.arena_start=edl_active_arena.arena_start;
         api.edl.arena_end=edl_active_arena.arena_end;
