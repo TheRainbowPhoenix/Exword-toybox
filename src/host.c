@@ -42,6 +42,14 @@ static char route_names[ROUTE_NAME_BYTES];
 static unsigned module_count, route_count, route_used;
 static struct shell_api api;
 
+/* Monotonic 128 Hz RTC diagnostics, wrapping at a 24 h tick counter. */
+static unsigned elapsed_ms(uint32_t then,uint32_t now)
+{
+    const uint32_t day=128u*86400u;
+    uint32_t ticks=now>=then?now-then:day-then+now;
+    return (unsigned)(((uint64_t)ticks*1000u)/128u);
+}
+
 static int ci_equal(const char *a, const char *b)
 {
     while (*a && *b) {
@@ -531,14 +539,18 @@ static int run_command(char *line)
         api.edl.arena_end=edl_active_arena.arena_end;
         api.edl.stack_start=edl_active_arena.stack_start;
         api.edl.stack_end=edl_active_arena.stack_end;
+        uint32_t clock_begin=rtc_ticks();
         /* Payload arena may contain dirty data left by the previous applet. */
         for (uint32_t p=api.edl.arena_start;p<api.edl.stack_end;p+=32)
             __asm__ volatile("ocbp @%0" :: "r"(p) : "memory");
         __asm__ volatile("synco" ::: "memory");
+        uint32_t clock_flushed=rtc_ticks();
         struct edl_image image;
         int rc=edl_load(image_path,&image);
+        uint32_t clock_loaded=rtc_ticks(),clock_synced=clock_loaded;
         if (!rc) {
             edl_sync_code();
+            clock_synced=rtc_ticks();
             *(volatile uint32_t *)(uintptr_t)api.edl.stack_start=0x45444c53;
             clearevents();
             in_applet=1;
@@ -551,6 +563,15 @@ static int run_command(char *line)
             }
             clearevents();
         }
+        uint32_t clock_done=rtc_ticks();
+        char timing[115];
+        snprintf(timing,sizeof timing,
+                 "time: cache %ums, ELF %ums, icache %ums, applet %ums",
+                 elapsed_ms(clock_begin,clock_flushed),
+                 elapsed_ms(clock_flushed,clock_loaded),
+                 elapsed_ms(clock_loaded,clock_synced),
+                 elapsed_ms(clock_synced,clock_done));
+        println(timing);
         if (rc) { char msg[50];snprintf(msg,sizeof msg,"applet exit status: %d",rc);println(msg); }
         return rc;
     }
@@ -559,23 +580,35 @@ static int run_command(char *line)
 }
 int main(void)
 {
+    uint32_t boot_begin=rtc_ticks();
     shell_term_init();
     shell_history_init(&history);
     dclear(DARK); dtext(20,22,WHITE,"Toybox: initializing Edelweiss..."); dupdate();
     int rc=edl_profile_init();
+    uint32_t boot_profile=rtc_ticks();
     if (rc) {
         char msg[60]; snprintf(msg,sizeof msg,"Unsupported firmware / memory (%d)",rc);
         dtext(20,48,WHITE,msg); dupdate();
         while (read_key()!=SHELL_KEY_ESC) {}
         touch_exword_quit(); return -2;
     }
-    if (content_location()) {
+    int locate_rc=content_location();
+    uint32_t boot_content=rtc_ticks();
+    if (locate_rc) {
         dtext(20,48,WHITE,"No EDL package content found"); dupdate();
         while (read_key()!=SHELL_KEY_ESC) {}
         edl_profile_release();touch_exword_quit();return -2;
     }
     memcpy(cwd,content,strlen(content)+1);
     init_api(); discover();
+    uint32_t boot_discovered=rtc_ticks();
+    char timing[110];
+    snprintf(timing,sizeof timing,
+             "boot: profile %ums, locate %ums, modules %ums",
+             elapsed_ms(boot_begin,boot_profile),
+             elapsed_ms(boot_profile,boot_content),
+             elapsed_ms(boot_content,boot_discovered));
+    println(timing);
     println("EX-word Toybox shell (experimental)");
     println("Physical QWERTY; AUDIO=touch; PGUP/PGDN=scroll.");
     println("DEL=backspace  EXIT=ESC  EXE=enter.");
