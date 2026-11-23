@@ -42,6 +42,14 @@ static char route_names[ROUTE_NAME_BYTES];
 static unsigned module_count, route_count, route_used;
 static struct shell_api api;
 
+/* Monotonic 128 Hz RTC diagnostics, wrapping at a 24 h tick counter. */
+static unsigned elapsed_ms(uint32_t then,uint32_t now)
+{
+    const uint32_t day=128u*86400u;
+    uint32_t ticks=now>=then?now-then:day-then+now;
+    return (unsigned)(((uint64_t)ticks*1000u)/128u);
+}
+
 static int ci_equal(const char *a, const char *b)
 {
     while (*a && *b) {
@@ -279,6 +287,31 @@ static int api_wait(struct edl_event *e)
            k==SHELL_KEY_LEFT?EDL_LEFT:k==SHELL_KEY_RIGHT?EDL_RIGHT:0;
     return 0;
 }
+/* Allow GUI EDLs to animate without waiting indefinitely for a key.
+   Uses the host's native keyboard service, never a payload-side syscall. */
+static int api_wait_timeout(struct edl_event *e,unsigned ms)
+{
+    if(!e) return -1;
+    if(!ms) return api_wait(e);
+    if(ms>60000) ms=60000;
+    uint32_t start=rtc_ticks(),target=(ms*128u+999u)/1000u;
+    *e=(struct edl_event){0};
+    for(;;) {
+        key_event_t event=pollevent();
+        if(event.type==KEYEV_DOWN) {
+            int k=shell_key_translate(event.key,
+                keydown(KEY_SHIFT)||event.shift,
+                keydown(KEY_ALPHA)||event.alpha);
+            e->key=k==SHELL_KEY_ENTER?EDL_OK:k==SHELL_KEY_ESC?EDL_BACK:
+                k==SHELL_KEY_UP?EDL_UP:k==SHELL_KEY_DOWN?EDL_DOWN:
+                k==SHELL_KEY_LEFT?EDL_LEFT:k==SHELL_KEY_RIGHT?EDL_RIGHT:0;
+            if(e->key)return 0;
+        }
+        uint32_t now=rtc_ticks();
+        uint32_t elapsed=now>=start?now-start:128u*86400u-start+now;
+        if(elapsed>=target)return 0;
+    }
+}
 static int request_launch(const char *path) { (void)path; return -1; }
 static int status(struct edl_status *out)
 {
@@ -343,7 +376,7 @@ static void init_api(void)
               .size=sizeof(struct shell_api),.width=DWIDTH,.height=DHEIGHT,
               .syscall_dispatcher=*(volatile uint32_t *)0x74000000,
               .image_path=image_path,.rect=api_rect,.text=api_text,
-              .present=api_present,.wait=api_wait,.scan=edl_scan,
+              .present=api_present,.wait=api_wait,.wait_timeout=api_wait_timeout,.scan=edl_scan,
               .metadata=edl_metadata,.read=safe_read,.os_call=edl_os_call,
               .launch=request_launch,.status=status},
         .shell_magic=SHELL_SERVICE_MAGIC,.shell_version=SHELL_SERVICE_VERSION,
@@ -354,48 +387,37 @@ static void init_api(void)
         .tty_size=tty_size
     };
 }
-static int read_manifest_bytes(void *ctx,uint32_t at,void *dst,size_t n)
-{
-    return edl_read((const char*)ctx,at,dst,(uint32_t)n)==(int)n?0:-1;
-}
-static int contains_app(const char *path,const char *appid)
-{
-    const char *s=path;
-    while ((s=strchr(s,'\\'))!=NULL) {
-        s++;
-        if (!*s) break;
-        char name[8]; unsigned n=0;
-        while (s[n] && s[n]!='\\' && n<7) { name[n]=s[n]; n++; }
-        name[n]=0;
-        if (ci_equal(name,appid) && s[n]=='\\' &&
-            ci_starts(s+n+1,"_CONTENT\\",9)) return 1;
-    }
-    return 0;
-}
+/* Fast path: locate only this add-in's directory. The old edl_scan()
+   repeated a full recursive scan of every installed app once per four
+   records, making Toybox startup O(number_of_addins^2). */
 static int content_location(void)
 {
-    char id[9]={0},unused[8]={0},appid[7]={0}; unsigned order[4];
+    char id[9]={0},unused[8]={0},appid[7]={0};
+    unsigned order[4];
     edl_os_call(0x15,(uint32_t)(uintptr_t)id,(uint32_t)(uintptr_t)unused,0,0);
-    if (edl_content_id(id,appid,order)) memcpy(appid,EDL_APPID,sizeof EDL_APPID);
+    if(edl_content_id(id,appid,order))memcpy(appid,EDL_APPID,sizeof EDL_APPID);
     const char *preferred=id[0]=='c' ? (id[1]=='1'?"\\\\crd1\\":"\\\\crd0\\") : "\\\\drv0\\";
+    static const struct {
+        const char *mount;
+        int casio;
+    } roots[]={
+        {"\\\\drv0",0},{"\\\\drv0",1},{"\\\\crd0",1},{"\\\\crd1",1}
+    };
+    char root[EDL_PATH_MAX],app[EDL_PATH_MAX],folder[EDL_PATH_MAX];
     int best=0;
-    struct edl_record rows[4];
-    int total=edl_scan(0,rows,4);
-    if (total<=0) return -1;
-    for (unsigned first=0;first<(unsigned)total;first+=4) {
-        int rc=edl_scan(first,rows,4);
-        if (rc<0) return -1;
-        for (unsigned i=0;i<4 && first+i<(unsigned)total;i++) {
-            const char *path=rows[i].path;
-            if (!contains_app(path,appid)) continue;
-            const char *last=strrchr(path,'\\');
-            if (!last || (size_t)(last-path)>=sizeof content) continue;
-            int score=ci_starts(path,preferred,(unsigned)strlen(preferred))?2:1;
-            if (score<=best) continue;
-            memcpy(content,path,(size_t)(last-path));
-            content[last-path]=0;
-            best=score;
+    for(unsigned i=0;i<sizeof roots/sizeof roots[0];i++) {
+        const char *parent=roots[i].mount;
+        if(roots[i].casio) {
+            if(host_fs_find_dir_child(parent,"CASIO",root))continue;
+            parent=root;
         }
+        if(host_fs_find_dir_child(parent,appid,app) ||
+           host_fs_find_dir_child(app,"_CONTENT",folder))continue;
+        int score=ci_starts(folder,preferred,(unsigned)strlen(preferred))?2:1;
+        if(score<=best)continue;
+        memcpy(content,folder,strlen(folder)+1);
+        best=score;
+        if(score==2)break;
     }
     return best?0:-1;
 }
@@ -404,10 +426,8 @@ static int add_module(const char *filename)
     if (!is_edl(filename) || strlen(filename)>12 || module_count>=SHELL_MAX_MODULES) return -1;
     char path[EDL_PATH_MAX];
     if (combine(path,content,filename)) return -1;
-    int size=host_fs_size(path);
-    if (size<0) return -1;
     struct shell_manifest manifest;
-    if (shell_manifest_read(read_manifest_bytes,path,(uint32_t)size,&manifest)) return -1;
+    if (host_fs_read_manifest(path,&manifest)) return -1;
     unsigned needed=0;
     for (unsigned i=0;i<manifest.count;i++) {
         for (unsigned j=0;j<route_count;j++)
@@ -513,14 +533,18 @@ static int run_command(char *line)
         api.edl.arena_end=edl_active_arena.arena_end;
         api.edl.stack_start=edl_active_arena.stack_start;
         api.edl.stack_end=edl_active_arena.stack_end;
+        uint32_t clock_begin=rtc_ticks();
         /* Payload arena may contain dirty data left by the previous applet. */
         for (uint32_t p=api.edl.arena_start;p<api.edl.stack_end;p+=32)
             __asm__ volatile("ocbp @%0" :: "r"(p) : "memory");
         __asm__ volatile("synco" ::: "memory");
+        uint32_t clock_flushed=rtc_ticks();
         struct edl_image image;
         int rc=edl_load(image_path,&image);
+        uint32_t clock_loaded=rtc_ticks(),clock_synced=clock_loaded;
         if (!rc) {
             edl_sync_code();
+            clock_synced=rtc_ticks();
             *(volatile uint32_t *)(uintptr_t)api.edl.stack_start=0x45444c53;
             clearevents();
             in_applet=1;
@@ -533,6 +557,15 @@ static int run_command(char *line)
             }
             clearevents();
         }
+        uint32_t clock_done=rtc_ticks();
+        char timing[115];
+        snprintf(timing,sizeof timing,
+                 "time: cache %ums, ELF %ums, icache %ums, applet %ums",
+                 elapsed_ms(clock_begin,clock_flushed),
+                 elapsed_ms(clock_flushed,clock_loaded),
+                 elapsed_ms(clock_loaded,clock_synced),
+                 elapsed_ms(clock_synced,clock_done));
+        println(timing);
         if (rc) { char msg[50];snprintf(msg,sizeof msg,"applet exit status: %d",rc);println(msg); }
         return rc;
     }
@@ -541,23 +574,35 @@ static int run_command(char *line)
 }
 int main(void)
 {
+    uint32_t boot_begin=rtc_ticks();
     shell_term_init();
     shell_history_init(&history);
     dclear(DARK); dtext(20,22,WHITE,"Toybox: initializing Edelweiss..."); dupdate();
     int rc=edl_profile_init();
+    uint32_t boot_profile=rtc_ticks();
     if (rc) {
         char msg[60]; snprintf(msg,sizeof msg,"Unsupported firmware / memory (%d)",rc);
         dtext(20,48,WHITE,msg); dupdate();
         while (read_key()!=SHELL_KEY_ESC) {}
         touch_exword_quit(); return -2;
     }
-    if (content_location()) {
+    int locate_rc=content_location();
+    uint32_t boot_content=rtc_ticks();
+    if (locate_rc) {
         dtext(20,48,WHITE,"No EDL package content found"); dupdate();
         while (read_key()!=SHELL_KEY_ESC) {}
         edl_profile_release();touch_exword_quit();return -2;
     }
     memcpy(cwd,content,strlen(content)+1);
     init_api(); discover();
+    uint32_t boot_discovered=rtc_ticks();
+    char timing[110];
+    snprintf(timing,sizeof timing,
+             "boot: profile %ums, locate %ums, modules %ums",
+             elapsed_ms(boot_begin,boot_profile),
+             elapsed_ms(boot_profile,boot_content),
+             elapsed_ms(boot_content,boot_discovered));
+    println(timing);
     println("EX-word Toybox shell (experimental)");
     println("Physical QWERTY; AUDIO=touch; PGUP/PGDN=scroll.");
     println("DEL=backspace  EXIT=ESC  EXE=enter.");

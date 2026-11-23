@@ -72,6 +72,24 @@ The default startup directory is the active add-in's `_CONTENT` folder.
 Absolute paths can use `/drv0/...`, `/crd0/...` or `/crd1/...` (the host also
 accepts native backslashes), while relative paths use the persistent `cwd`.
 
+## Launch-time performance and profiling
+
+Toybox's D01 locates its own add-in by targeted, case-restoring native directory
+lookups instead of repeatedly rescanning every installed add-in. It reads each
+ELF applet manifest in one native filesystem session instead of reopening the
+file for every section-header access. Edelweiss's merged 8 KiB ELF read cache
+has **eight 1 KiB slots**, retaining more separate relocation-data regions
+without raising the EX-word resident RAM requirement.
+
+The startup line reports `boot: profile ... locate ... modules ...`; after an
+applet returns Toybox reports `time: cache ... ELF ... icache ... applet ...`.
+`applet` includes **the script's entire execution time** (so use `js HELLO.JS`
+for startup comparisons; `DEMO.JS` intentionally runs a timed display loop).
+Real-device baseline after the cache change: `HELLO.JS` reported cache 7 ms,
+ELF 7437 ms, icache 23 ms, applet 1343 ms; `DEMO.JS` reported cache 7 ms,
+ELF 7445 ms, icache 23 ms, applet 11968 ms. These are user-observed timings,
+not universal device speed guarantees.
+
 ## CI build and hardware safety
 
 GitHub Actions has **successfully cross-compiled** the native D01 and all three
@@ -79,15 +97,18 @@ EDL modules, verified the D01 is at most 128 KiB, and validated the Japanese
 and Chinese installation packages. Download the appropriate `Toybox-ja` or
 `Toybox-cn` package from [GitHub Actions](https://github.com/TheRainbowPhoenix/Exword-toybox/actions).
 
-**No hardware execution has been performed.** Edelweiss's firmware
-fingerprints and executable RAM assumptions remain experimental. Do not use
+**Partial hardware validation:** MicroQuickJS has launched and executed
+`HELLO.JS` and `DEMO.JS` on a user's EX-word device. Toybox and the Edelweiss
+runtime remain experimental across hardware and firmware variants.
+Edelweiss's firmware fingerprints and executable RAM assumptions remain experimental. Do not use
 an unknown firmware or a device you cannot recover, and back up device data.
 See the [read-only device smoke-test checklist](docs/SMOKE_TEST.md) before
 trying filesystem modifications. Destructive writes, including editor saves,
 are not yet validated on physical hardware.
 
-The bounded resident command registry supports **four EDL bundles and 48 total
-applet names**. The next milestone is read-only device verification (boot,
+The bounded resident command registry supports **five EDL bundles and 48 total
+applet names**. The fifth slot can host the optional `qjs.edl` JavaScript
+interpreter alongside the four standard bundles (`js FILE.JS [args...]`). The next milestone is read-only device verification (boot,
 keyboard, `help`, `pwd`, `modules`, `ls`, `cat`, module return), followed
 by controlled tests of disposable files and further BusyBox applet ports.
 

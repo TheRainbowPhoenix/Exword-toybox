@@ -22,6 +22,42 @@ int host_fs_size(const char *path)
     struct size_query q = {.path = path};
     return gint_world_switch(GINT_CALL(size_native, (void *)&q));
 }
+/* Manifest inspection formerly reopened the same ELF through one world
+   switch for every tiny section-header read. Use one OS-world file session. */
+static int manifest_read_native(void *ctx,uint32_t offset,void *dst,size_t bytes)
+{
+    int fd=*(int *)ctx;
+    if(offset>INT32_MAX || bytes>INT32_MAX || exword_sys_seek(fd,(int)offset,0)<0)
+        return -1;
+    unsigned char *p=dst;
+    while(bytes) {
+        int n=exword_sys_read(fd,p,(int)bytes);
+        if(n<=0 || (size_t)n>bytes)return -1;
+        p+=n;bytes-=(size_t)n;
+    }
+    return 0;
+}
+struct manifest_query {
+    const char *path;
+    struct shell_manifest *result;
+};
+static int manifest_native(struct manifest_query *q)
+{
+    int fd=exword_sys_open(q->path,1);
+    if(fd<0)return -1;
+    int size=exword_sys_get_filesize(fd);
+    int rc=size>=0?shell_manifest_read(manifest_read_native,&fd,(uint32_t)size,
+                                        q->result):-1;
+    int closed=exword_sys_close(fd);
+    return rc<0 || closed<0?-1:0;
+}
+int host_fs_read_manifest(const char *path,struct shell_manifest *out)
+{
+    if(!path || !out)return -1;
+    struct manifest_query q={.path=path,.result=out};
+    return gint_world_switch(GINT_CALL(manifest_native,(void *)&q));
+}
+
 static int same_name(const char *a, const char *b)
 {
     while (*a && *b) {
@@ -67,6 +103,47 @@ static int exists_dir_native(const char *path)
     exword_sys_findclose(fd);
     return found;
 }
+/* Find an exact-case directory component, without scanning all add-ins.
+   A single native-world switch owns the entire findfirst/findnext lifecycle. */
+struct child_query {
+    const char *parent,*name;
+    char *out;
+};
+static int find_child_native(struct child_query *q)
+{
+    char pattern[EDL_PATH_MAX],entry[512]={0};
+    if(make_glob(q->parent,pattern))return -1;
+    int handle=-1,found=-1;
+    unsigned long kind=0;
+    int rc=exword_sys_findfirst(pattern,&handle,entry,&kind);
+    if(rc<0)return -1;
+    do {
+        entry[sizeof entry-1]=0;
+        if(kind==5 && same_name(entry,q->name)) {
+            size_t n=strlen(q->parent),m=strlen(entry);
+            if(n+m+2<=EDL_PATH_MAX) {
+                memcpy(q->out,q->parent,n);
+                q->out[n++]='\\';
+                memcpy(q->out+n,entry,m+1);
+                found=0;
+            }
+            break;
+        }
+        entry[0]=0;kind=0;
+        rc=exword_sys_findnext(handle,entry,&kind);
+    }while(rc>=0);
+    int closed=exword_sys_findclose(handle);
+    return closed<0 ? -1:found;
+}
+int host_fs_find_dir_child(const char *parent,const char *name,
+                           char out[EDL_PATH_MAX])
+{
+    if(!parent || !name || !*name || !out || strchr(name,'\\') ||
+       strchr(name,'/') || strlen(name)>127)return -1;
+    struct child_query q={.parent=parent,.name=name,.out=out};
+    return gint_world_switch(GINT_CALL(find_child_native,(void *)&q));
+}
+
 struct dir_query {
     const char *path;
     unsigned first, cap;

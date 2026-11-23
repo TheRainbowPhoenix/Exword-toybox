@@ -112,6 +112,10 @@ int main(void)
     assert(host_fs_create(folder,1)==0);
     assert(files[0].dir);
     assert(host_fs_dir_exists(folder)==1);
+    char actual[EDL_PATH_MAX]={0};
+    assert(host_fs_find_dir_child("\\\\drv0","folder",actual)==0);
+    assert(!strcmp(actual,folder));
+    assert(host_fs_find_dir_child("\\\\drv0","missing",actual)<0);
     assert(host_fs_create(file,0)==0);
     assert(host_fs_write(file,0,"abc",3,SHELL_WRITE_TRUNC|SHELL_WRITE_CREATE)==3);
     assert(host_fs_write(file,3,"def",3,0)==3);

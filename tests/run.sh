@@ -33,7 +33,7 @@ cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
   tests/check_busybox.c src/busybox_text.c -o /tmp/toybox-busybox-tests
 /tmp/toybox-busybox-tests
 cc -std=c11 -Wall -Wextra -Werror -Itests/stubs -Iinclude -Isrc \
-  tests/check_fs.c src/host_fs.c src/names.c -o /tmp/toybox-nativefs-tests
+  tests/check_fs.c src/host_fs.c src/manifest.c src/names.c -o /tmp/toybox-nativefs-tests
 /tmp/toybox-nativefs-tests
 cc -std=c11 -Wall -Wextra -Werror -Iinclude src/terminal.c tests/check_terminal.c -o /tmp/toybox-terminal-tests
 /tmp/toybox-terminal-tests
