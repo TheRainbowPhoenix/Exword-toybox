@@ -383,44 +383,37 @@ static int read_manifest_bytes(void *ctx,uint32_t at,void *dst,size_t n)
 {
     return edl_read((const char*)ctx,at,dst,(uint32_t)n)==(int)n?0:-1;
 }
-static int contains_app(const char *path,const char *appid)
-{
-    const char *s=path;
-    while ((s=strchr(s,'\\'))!=NULL) {
-        s++;
-        if (!*s) break;
-        char name[8]; unsigned n=0;
-        while (s[n] && s[n]!='\\' && n<7) { name[n]=s[n]; n++; }
-        name[n]=0;
-        if (ci_equal(name,appid) && s[n]=='\\' &&
-            ci_starts(s+n+1,"_CONTENT\\",9)) return 1;
-    }
-    return 0;
-}
+/* Fast path: locate only this add-in's directory. The old edl_scan()
+   repeated a full recursive scan of every installed app once per four
+   records, making Toybox startup O(number_of_addins^2). */
 static int content_location(void)
 {
-    char id[9]={0},unused[8]={0},appid[7]={0}; unsigned order[4];
+    char id[9]={0},unused[8]={0},appid[7]={0};
+    unsigned order[4];
     edl_os_call(0x15,(uint32_t)(uintptr_t)id,(uint32_t)(uintptr_t)unused,0,0);
-    if (edl_content_id(id,appid,order)) memcpy(appid,EDL_APPID,sizeof EDL_APPID);
+    if(edl_content_id(id,appid,order))memcpy(appid,EDL_APPID,sizeof EDL_APPID);
     const char *preferred=id[0]=='c' ? (id[1]=='1'?"\\\\crd1\\":"\\\\crd0\\") : "\\\\drv0\\";
+    static const struct {
+        const char *mount;
+        int casio;
+    } roots[]={
+        {"\\\\drv0",0},{"\\\\drv0",1},{"\\\\crd0",1},{"\\\\crd1",1}
+    };
+    char root[EDL_PATH_MAX],app[EDL_PATH_MAX],folder[EDL_PATH_MAX];
     int best=0;
-    struct edl_record rows[4];
-    int total=edl_scan(0,rows,4);
-    if (total<=0) return -1;
-    for (unsigned first=0;first<(unsigned)total;first+=4) {
-        int rc=edl_scan(first,rows,4);
-        if (rc<0) return -1;
-        for (unsigned i=0;i<4 && first+i<(unsigned)total;i++) {
-            const char *path=rows[i].path;
-            if (!contains_app(path,appid)) continue;
-            const char *last=strrchr(path,'\\');
-            if (!last || (size_t)(last-path)>=sizeof content) continue;
-            int score=ci_starts(path,preferred,(unsigned)strlen(preferred))?2:1;
-            if (score<=best) continue;
-            memcpy(content,path,(size_t)(last-path));
-            content[last-path]=0;
-            best=score;
+    for(unsigned i=0;i<sizeof roots/sizeof roots[0];i++) {
+        const char *parent=roots[i].mount;
+        if(roots[i].casio) {
+            if(host_fs_find_dir_child(parent,"CASIO",root))continue;
+            parent=root;
         }
+        if(host_fs_find_dir_child(parent,appid,app) ||
+           host_fs_find_dir_child(app,"_CONTENT",folder))continue;
+        int score=ci_starts(folder,preferred,(unsigned)strlen(preferred))?2:1;
+        if(score<=best)continue;
+        memcpy(content,folder,strlen(folder)+1);
+        best=score;
+        if(score==2)break;
     }
     return best?0:-1;
 }
