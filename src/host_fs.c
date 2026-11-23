@@ -22,6 +22,42 @@ int host_fs_size(const char *path)
     struct size_query q = {.path = path};
     return gint_world_switch(GINT_CALL(size_native, (void *)&q));
 }
+/* Manifest inspection formerly reopened the same ELF through one world
+   switch for every tiny section-header read. Use one OS-world file session. */
+static int manifest_read_native(void *ctx,uint32_t offset,void *dst,size_t bytes)
+{
+    int fd=*(int *)ctx;
+    if(offset>INT32_MAX || bytes>INT32_MAX || exword_sys_seek(fd,(int)offset,0)<0)
+        return -1;
+    unsigned char *p=dst;
+    while(bytes) {
+        int n=exword_sys_read(fd,p,(int)bytes);
+        if(n<=0 || (size_t)n>bytes)return -1;
+        p+=n;bytes-=(size_t)n;
+    }
+    return 0;
+}
+struct manifest_query {
+    const char *path;
+    struct shell_manifest *result;
+};
+static int manifest_native(struct manifest_query *q)
+{
+    int fd=exword_sys_open(q->path,1);
+    if(fd<0)return -1;
+    int size=exword_sys_get_filesize(fd);
+    int rc=size>=0?shell_manifest_read(manifest_read_native,&fd,(uint32_t)size,
+                                        q->result):-1;
+    int closed=exword_sys_close(fd);
+    return rc<0 || closed<0?-1:0;
+}
+int host_fs_read_manifest(const char *path,struct shell_manifest *out)
+{
+    if(!path || !out)return -1;
+    struct manifest_query q={.path=path,.result=out};
+    return gint_world_switch(GINT_CALL(manifest_native,(void *)&q));
+}
+
 static int same_name(const char *a, const char *b)
 {
     while (*a && *b) {
