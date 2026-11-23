@@ -313,6 +313,18 @@ static void api_rect(int x,int y,int w,int h,uint16_t color)
     if (w>0 && h>0 && x>=0 && y>=0 && x<=DWIDTH-w && y<=DHEIGHT-h)
         drect(x,y,x+w-1,y+h-1,color);
 }
+/* Mirror Edelweiss's existing EDL blit callback in the Toybox resident.
+   Allows old EDL payloads to reuse a validated RGB565 framebuffer service. */
+static void api_blit(int x,int y,int w,int h,const uint16_t *pixels)
+{
+    if(!pixels||w<=0||h<=0||x<0||y<0||
+       x>DWIDTH-w||y>DHEIGHT-h)return;
+    uint16_t *vram=NULL;
+    dgetvram(&vram,NULL);
+    if(!vram)return;
+    for(int row=0;row<h;row++)
+        memcpy(vram+(y+row)*DWIDTH+x,pixels+(size_t)row*w,(size_t)w*2);
+}
 static void api_text(int x,int y,uint16_t color,const char *s) { dtext(x,y,color,s); }
 static void api_present(void) { dupdate(); }
 static int api_wait(struct edl_event *e)
@@ -412,7 +424,7 @@ static void init_api(void)
         .edl={.magic=EDL_ABI_MAGIC,.version=EDL_ABI_VERSION,
               .size=sizeof(struct shell_api),.width=DWIDTH,.height=DHEIGHT,
               .syscall_dispatcher=*(volatile uint32_t *)0x74000000,
-              .image_path=image_path,.rect=api_rect,.text=api_text,
+              .image_path=image_path,.rect=api_rect,.text=api_text,.blit=api_blit,
               .present=api_present,.wait=api_wait,.wait_timeout=api_wait_timeout,.scan=edl_scan,
               .metadata=edl_metadata,.read=safe_read,.os_call=edl_os_call,
               .launch=request_launch,.status=status},
