@@ -41,6 +41,10 @@ static struct route routes[MAX_ROUTES];
 static char route_names[ROUTE_NAME_BYTES];
 static unsigned module_count, route_count, route_used;
 static struct shell_api api;
+/* Applets may call console_write() once per character or line. Throttle
+   full-screen LCD refreshes while retaining all characters in the terminal. */
+static uint32_t last_console_refresh;
+static int console_refresh_valid, console_dirty;
 
 /* Monotonic 128 Hz RTC diagnostics, wrapping at a 24 h tick counter. */
 static unsigned elapsed_ms(uint32_t then,uint32_t now)
@@ -201,7 +205,19 @@ static int console_write(const void *bytes,unsigned length)
 {
     if (!bytes && length) return -1;
     shell_term_feed(bytes,length);
-    draw_terminal();
+    if (!length) return 0;
+    console_dirty=1;
+    uint32_t now=rtc_ticks(),day=128u*86400u;
+    uint32_t dt=now>=last_console_refresh ? now-last_console_refresh :
+                day-last_console_refresh+now;
+    /* At most ~16 LCD refreshes per second for streamed applet output,
+       instead of one full 528x320 repaint per small write. */
+    if (!console_refresh_valid || dt>=8u) {
+        draw_terminal();
+        last_console_refresh=now;
+        console_refresh_valid=1;
+        console_dirty=0;
+    }
     return (int)length;
 }
 static int keyboard_hit(int x,int y)
@@ -229,6 +245,13 @@ static int keyboard_hit(int x,int y)
 }
 static int read_key(void)
 {
+    /* An interactive applet must see its latest output before waiting. */
+    if(console_dirty) {
+        draw_terminal();
+        last_console_refresh=rtc_ticks();
+        console_refresh_valid=1;
+        console_dirty=0;
+    }
     if(keyboard_visible) { draw_keyboard();dupdate(); }
     for (;;) {
         key_event_t e=waitevent(NULL); /* EX-word scans on poll, not sleep */
@@ -547,6 +570,8 @@ static int run_command(char *line)
             clock_synced=rtc_ticks();
             *(volatile uint32_t *)(uintptr_t)api.edl.stack_start=0x45444c53;
             clearevents();
+            console_refresh_valid=0;
+            console_dirty=0;
             in_applet=1;
             rc=edl_invoke(image.entry,&api.edl,api.edl.stack_end);
             in_applet=0;
