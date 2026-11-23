@@ -4,7 +4,7 @@ if(NOT FXSDK_PLATFORM_LONG STREQUAL "exword")
   message(FATAL_ERROR "Configure with the fxSDK EXWORD.cmake toolchain")
 endif()
 
-set(EDELWEISS_REF "feature/gint-api-image-touch-exports" CACHE STRING "Edelweiss branch/tag/commit")
+set(EDELWEISS_REF "4e411ee52edd8f564ffb1647f1b95e1c9fc7db04" CACHE STRING "Edelweiss branch/tag/commit")
 set(EXWORD_APP_ID "TOYBX" CACHE STRING "5-character EX-word install ID")
 set(EXWORD_MODULE "toybox" CACHE STRING "D01 filename, <=6 characters for elf2d01")
 set(EXWORD_APP_TITLE "Toybox Shell" CACHE STRING "Dictionary add-in title")
