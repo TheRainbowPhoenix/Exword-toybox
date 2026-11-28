@@ -44,13 +44,48 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --depth=1 --branch exword https://github.com/TheRainbowPhoenix/gint-exword.git /tmp/gint-src
+          git clone --depth=1 --branch feat/binary-crash-qr https://github.com/TheRainbowPhoenix/gint-exword.git /tmp/gint-src
           cmake -S /tmp/gint-src -B /tmp/gint-build \
             -DCMAKE_TOOLCHAIN_FILE=/tmp/fxsdk-exword/lib/cmake/fxsdk/EXWORD.cmake \
             -DCMAKE_INSTALL_PREFIX=/tmp/gint-exword \
             -DCMAKE_MODULE_PATH=/tmp/fxsdk-exword/lib/cmake/fxsdk
           cmake --build /tmp/gint-build --parallel 2
           cmake --install /tmp/gint-build
+          # QR must be enabled on installed EX-word gint, not only on developer builds.
+          grep -E '^#define GINT_CRASH_QR( |$)' /tmp/gint-build/include/gint/config.h
+          sh-elf-nm --defined-only /tmp/gint-exword/lib/libgint-exword.a | grep -E ' _gint_crash_draw
+      - name: Configure and compile shell + applet packs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build \
+            -DCMAKE_TOOLCHAIN_FILE=/tmp/fxsdk-exword/lib/cmake/fxsdk/EXWORD.cmake \
+            -DCMAKE_PREFIX_PATH=/tmp/gint-exword \
+            '-DCMAKE_MODULE_PATH=/tmp/gint-exword/lib/cmake/fxsdk;/tmp/fxsdk-exword/lib/cmake/fxsdk' \
+            -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
+            -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
+          cmake --build build --parallel 2
+          python3 tools/check_package.py build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Toybox-ja
+          path: build/packages/ja/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Toybox-cn
+          path: build/packages/cn/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Toybox-debug
+          path: |
+            build/*.d01
+            build/*.edl
+            build/*.map
+          if-no-files-found: warn
+
       - name: Configure and compile shell + applet packs
         shell: bash
         run: |
