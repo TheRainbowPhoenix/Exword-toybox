@@ -89,35 +89,3 @@ jobs:
             build/*.edl
             build/*.map
           if-no-files-found: warn
-
-      - name: Configure and compile shell + applet packs
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake -S . -B build \
-            -DCMAKE_TOOLCHAIN_FILE=/tmp/fxsdk-exword/lib/cmake/fxsdk/EXWORD.cmake \
-            -DCMAKE_PREFIX_PATH=/tmp/gint-exword \
-            '-DCMAKE_MODULE_PATH=/tmp/gint-exword/lib/cmake/fxsdk;/tmp/fxsdk-exword/lib/cmake/fxsdk' \
-            -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
-            -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
-          cmake --build build --parallel 2
-          python3 tools/check_package.py build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Toybox-ja
-          path: build/packages/ja/
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Toybox-cn
-          path: build/packages/cn/
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Toybox-debug
-          path: |
-            build/*.d01
-            build/*.edl
-            build/*.map
-          if-no-files-found: warn
