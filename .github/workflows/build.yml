@@ -65,6 +65,8 @@ jobs:
             -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
             -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
           cmake --build build --parallel 2
+          # It must survive the static linker and appear in Toybox, not only libgint.
+          grep _gint_crash_draw build/toybox.map
           python3 tools/check_package.py build
       - uses: actions/upload-artifact@v4
         with:
