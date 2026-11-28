@@ -4,7 +4,7 @@ if(NOT FXSDK_PLATFORM_LONG STREQUAL "exword")
   message(FATAL_ERROR "Configure with the fxSDK EXWORD.cmake toolchain")
 endif()
 
-set(EDELWEISS_REF "7d09dd778a59d35cb68643948149d4f299293c21" CACHE STRING "Edelweiss branch/tag/commit")
+set(EDELWEISS_REF "72633557214d2ccaae671717d821a1d4e2f230f9" CACHE STRING "Edelweiss branch/tag/commit")
 set(EXWORD_APP_ID "TOYBX" CACHE STRING "5-character EX-word install ID")
 set(EXWORD_MODULE "toybox" CACHE STRING "D01 filename, <=6 characters for elf2d01")
 set(EXWORD_APP_TITLE "Toybox Shell" CACHE STRING "Dictionary add-in title")
