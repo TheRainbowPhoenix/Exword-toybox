@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: TheRainbowPhoenix/Edelweiss
-          ref: 4e411ee52edd8f564ffb1647f1b95e1c9fc7db04
+          ref: 72633557214d2ccaae671717d821a1d4e2f230f9
           path: dependencies/edelweiss
       - uses: actions/checkout@v4
         with:
@@ -51,6 +51,11 @@ jobs:
             -DCMAKE_MODULE_PATH=/tmp/fxsdk-exword/lib/cmake/fxsdk
           cmake --build /tmp/gint-build --parallel 2
           cmake --install /tmp/gint-build
+          # QR must be enabled on installed EX-word gint, not only on developer builds.
+          grep -E '^#define GINT_CRASH_QR( |$)' /tmp/gint-build/include/gint/config.h
+          sh-elf-nm --defined-only /tmp/gint-exword/lib/libgint-exword.a | grep _gint_crash_draw
+          python3 -m py_compile /tmp/gint-src/tools/decode_crash.py
+          python3 /tmp/gint-src/tools/test_crash_qr.py
       - name: Configure and compile shell + applet packs
         shell: bash
         run: |
@@ -62,6 +67,8 @@ jobs:
             -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
             -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
           cmake --build build --parallel 2
+          # It must survive the static linker and appear in Toybox, not only libgint.
+          grep _gint_crash_draw build/toybox.map
           python3 tools/check_package.py build
       - uses: actions/upload-artifact@v4
         with:
