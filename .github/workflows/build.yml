@@ -55,6 +55,7 @@ jobs:
           grep -E '^#define GINT_CRASH_QR( |$)' /tmp/gint-build/include/gint/config.h
           sh-elf-nm --defined-only /tmp/gint-exword/lib/libgint-exword.a | grep _gint_crash_draw
           python3 -m py_compile /tmp/gint-src/tools/decode_crash.py
+          python3 /tmp/gint-src/tools/test_crash_qr.py
       - name: Configure and compile shell + applet packs
         shell: bash
         run: |
