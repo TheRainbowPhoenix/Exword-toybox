@@ -53,7 +53,7 @@ jobs:
           cmake --install /tmp/gint-build
           # QR must be enabled on installed EX-word gint, not only on developer builds.
           grep -E '^#define GINT_CRASH_QR( |$)' /tmp/gint-build/include/gint/config.h
-          sh-elf-nm --defined-only /tmp/gint-exword/lib/libgint-exword.a | grep -E ' _gint_crash_draw
+          sh-elf-nm --defined-only /tmp/gint-exword/lib/libgint-exword.a | grep _gint_crash_draw
       - name: Configure and compile shell + applet packs
         shell: bash
         run: |
