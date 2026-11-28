@@ -7,4 +7,7 @@ void dclear(uint16_t);
 void drect(int,int,int,int,uint16_t);
 void dtext(int,int,uint16_t,const char*);
 void dupdate(void);
+void dgetvram(uint16_t **,uint16_t **);
+void dnsize(const char *,int,const void *,int *,int *);
+const char *drsize(const char *,const void *,int,int *);
 #endif

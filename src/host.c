@@ -41,6 +41,10 @@ static struct route routes[MAX_ROUTES];
 static char route_names[ROUTE_NAME_BYTES];
 static unsigned module_count, route_count, route_used;
 static struct shell_api api;
+/* Applets may call console_write() once per character or line. Throttle
+   full-screen LCD refreshes while retaining all characters in the terminal. */
+static uint32_t last_console_refresh;
+static int console_refresh_valid, console_dirty;
 
 /* Monotonic 128 Hz RTC diagnostics, wrapping at a 24 h tick counter. */
 static unsigned elapsed_ms(uint32_t then,uint32_t now)
@@ -184,15 +188,29 @@ static void draw_terminal(void)
     }
     int prompt_y=keyboard_visible?185:301;
     drect(0,prompt_y-4,527,prompt_y+15,0x3186);
-    char prompt[SHELL_TERM_COLS+1]="EX> ";
-    unsigned start=input_cursor>58?input_cursor-58:0;
+    char prompt[SHELL_LINE_SIZE+5]="EX> ";
+    unsigned start=0;
+    int prefix_width=0;
+    /* Keep the cursor visible with actual proportional-font widths.
+       A fixed 8 px/character estimate breaks with '.', 'i', etc. */
+    for(;;) {
+        unsigned prefix=input_cursor-start;
+        memcpy(prompt+4,input+start,prefix);
+        prompt[4+prefix]=0;
+        dnsize(prompt,(int)(4+prefix),NULL,&prefix_width,NULL);
+        if(prefix_width<=DWIDTH-24 || start>=input_cursor)break;
+        start++;
+    }
     unsigned visible=input_len-start;
-    if(visible>58)visible=58;
     memcpy(prompt+4,input+start,visible);
     prompt[4+visible]=0;
+    int rendered_width=0;
+    const char *tail=drsize(prompt,NULL,DWIDTH-24,&rendered_width);
+    if(tail)prompt[tail-prompt]=0;
     dtext(8,prompt_y,WHITE,prompt);
-    unsigned cursor_x=8+(4+input_cursor-start)*8;
-    drect((int)cursor_x,prompt_y+12,(int)cursor_x+6,prompt_y+13,WHITE);
+    int cursor_x=8+prefix_width;
+    if(cursor_x>DWIDTH-8)cursor_x=DWIDTH-8;
+    drect(cursor_x,prompt_y+12,cursor_x+6,prompt_y+13,WHITE);
     if (shell_term_back()) dtext(430,prompt_y,WHITE,"PGDN");
     if (keyboard_visible) draw_keyboard();
     dupdate();
@@ -201,7 +219,19 @@ static int console_write(const void *bytes,unsigned length)
 {
     if (!bytes && length) return -1;
     shell_term_feed(bytes,length);
-    draw_terminal();
+    if (!length) return 0;
+    console_dirty=1;
+    uint32_t now=rtc_ticks(),day=128u*86400u;
+    uint32_t dt=now>=last_console_refresh ? now-last_console_refresh :
+                day-last_console_refresh+now;
+    /* At most ~16 LCD refreshes per second for streamed applet output,
+       instead of one full 528x320 repaint per small write. */
+    if (!console_refresh_valid || dt>=8u) {
+        draw_terminal();
+        last_console_refresh=now;
+        console_refresh_valid=1;
+        console_dirty=0;
+    }
     return (int)length;
 }
 static int keyboard_hit(int x,int y)
@@ -229,6 +259,13 @@ static int keyboard_hit(int x,int y)
 }
 static int read_key(void)
 {
+    /* An interactive applet must see its latest output before waiting. */
+    if(console_dirty) {
+        draw_terminal();
+        last_console_refresh=rtc_ticks();
+        console_refresh_valid=1;
+        console_dirty=0;
+    }
     if(keyboard_visible) { draw_keyboard();dupdate(); }
     for (;;) {
         key_event_t e=waitevent(NULL); /* EX-word scans on poll, not sleep */
@@ -275,6 +312,18 @@ static void api_rect(int x,int y,int w,int h,uint16_t color)
 {
     if (w>0 && h>0 && x>=0 && y>=0 && x<=DWIDTH-w && y<=DHEIGHT-h)
         drect(x,y,x+w-1,y+h-1,color);
+}
+/* Mirror Edelweiss's existing EDL blit callback in the Toybox resident.
+   Allows old EDL payloads to reuse a validated RGB565 framebuffer service. */
+static void api_blit(int x,int y,int w,int h,const uint16_t *pixels)
+{
+    if(!pixels||w<=0||h<=0||x<0||y<0||
+       x>DWIDTH-w||y>DHEIGHT-h)return;
+    uint16_t *vram=NULL;
+    dgetvram(&vram,NULL);
+    if(!vram)return;
+    for(int row=0;row<h;row++)
+        memcpy(vram+(y+row)*DWIDTH+x,pixels+(size_t)row*w,(size_t)w*2);
 }
 static void api_text(int x,int y,uint16_t color,const char *s) { dtext(x,y,color,s); }
 static void api_present(void) { dupdate(); }
@@ -375,7 +424,7 @@ static void init_api(void)
         .edl={.magic=EDL_ABI_MAGIC,.version=EDL_ABI_VERSION,
               .size=sizeof(struct shell_api),.width=DWIDTH,.height=DHEIGHT,
               .syscall_dispatcher=*(volatile uint32_t *)0x74000000,
-              .image_path=image_path,.rect=api_rect,.text=api_text,
+              .image_path=image_path,.rect=api_rect,.text=api_text,.blit=api_blit,
               .present=api_present,.wait=api_wait,.wait_timeout=api_wait_timeout,.scan=edl_scan,
               .metadata=edl_metadata,.read=safe_read,.os_call=edl_os_call,
               .launch=request_launch,.status=status},
@@ -528,6 +577,10 @@ static int run_command(char *line)
     for (unsigned i=0;i<route_count;i++) {
         if (!ci_equal(argv[0],route_names+routes[i].name_at)) continue;
         if (combine(image_path,content,modules[routes[i].mod].name)) return -1;
+        print("loading ");
+        print(modules[routes[i].mod].name);
+        println("...");
+        draw_terminal(); /* Show progress before slow cache flush and ELF I/O. */
         api.command=argv[0]; api.argc=argc; api.argv=argv;
         api.edl.arena_start=edl_active_arena.arena_start;
         api.edl.arena_end=edl_active_arena.arena_end;
@@ -547,6 +600,8 @@ static int run_command(char *line)
             clock_synced=rtc_ticks();
             *(volatile uint32_t *)(uintptr_t)api.edl.stack_start=0x45444c53;
             clearevents();
+            console_refresh_valid=0;
+            console_dirty=0;
             in_applet=1;
             rc=edl_invoke(image.entry,&api.edl,api.edl.stack_end);
             in_applet=0;
